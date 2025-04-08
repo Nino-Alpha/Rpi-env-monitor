@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>温湿度监测（DHT11）</title>
+    <link rel="stylesheet" href='../static/style.css'/>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style>
+		body {
+			text-align: center;
+		}
+
+		#g1,
+		#g2 {
+			width: 200px;
+			height: 160px;
+			display: inline-block;
+			margin: 1em;
+		}
+
+    </style>
+</head>
+
+<body>
+	<h1>实时数据 </h1>
+    <div id="g1" class="gauge"></div>
+    <div id="g2" class="gauge"></div>
+    <hr>
+	<h3> 视频监控 ==> <a href="/camera" class="button">LIVE</a></h3>
+	<hr>
+	<h3> 获取最新读数: {{ time }} ==> <a href="/"class="button">刷新</a></h3>	
+	<hr>
+	<!-- 报警状态显示 -->
+    <div id="alerts"  >
+    <h3>当前时段阈值：temp：{{current_th[3]}} hum：{{current_th[4]}}</h3>
+    <p id="temp_alert"></p>
+    <p id="hum_alert"></p>
+    </div>
+	<hr>
+	<!-- 自定义阈值设置 -->
+    <h3>时段阈值设置</h3>
+    <form method="post" action="/set_thresholds" onsubmit="return validateThresholds()">
+    <table border="1" style="margin:auto;">
+        <tr>
+            <th>时段</th><th>开始时间</th><th>结束时间</th>
+            <th>温度阈值(℃)</th><th>湿度阈值(%)</th>
+        </tr>
+        {% for period in thresholds %}
+        <tr>
+            <td>{{ period[0] }}</td>
+            <td><input type="time" name="{{ period[0] }}_start" 
+                     value="{{ period[1] }}" required></td>
+            <td><input type="time" name="{{ period[0] }}_end" 
+                     value="{{ period[2] }}" required></td>
+            <td><input type="number" step="0.1" name="{{ period[0] }}_temp" 
+                     min="0" max="50" value="{{ period[3] }}" required></td>
+            <td><input type="number" step="0.1" name="{{ period[0] }}_hum" 
+                     min="10" max="80" value="{{ period[4] }}" required></td>
+        </tr>
+        {% endfor %}
+    </table>
+    <input type="submit" value="保存设置" class="button">
+    </form>
+	<hr>
+	<!-- 自定义传感器频率 -->
+    <h3> 传感器检测频率设置 </h3>
+    <p> 当前检测频率：{{ sampleFreq }} 秒 </p>
+    <form method="POST" action="/set_frequency">
+    <label for="frequency">输入检测频率（秒/次）：</label>
+    <input type="number" id="frequency" name="frequency" min="1" required>
+    <input type="submit" class="button" value="设置">
+    </form>
+	<hr>
+	<h3> 历史数据 </h3>
+		<p> 输入要检索的样本数量：（从最新数据倒序计数）
+		<form method="POST" action="/set_numSamples">
+			<input name="numSamples" value= {{numSamples}}>
+			<input type="submit" class="button" value="提交">
+			
+		</form></p>
+		<hr>
+		<img src="/plot/temp" alt="Image Placeholder" width="49%">
+		<img src="/plot/hum" alt="Image Placeholder" width="49%">
+	
+	<p> @2025 Developed by Ningchy , BUPT 2021210585 </p>
+    
+    <script src="../static/raphael-2.1.4.min.js"></script>
+    <script src="../static/justgage.js"></script>
+    <script>
+		var g1, g2;
+		document.addEventListener("DOMContentLoaded", function(event) {
+			g1 = new JustGage({
+				id: "g1",
+				value: {{ temp }},
+				valueFontColor: "yellow",
+				titleFontColor: "yellow", 
+				min: -10,
+				max: 50,
+				title: "Temperature",
+				label: "Celcius",
+			});
+
+			g2 = new JustGage({
+				id: "g2",
+				value: {{ hum }},
+				valueFontColor: "yellow",
+				titleFontColor: "yellow",
+				min: 0,
+				max: 100,
+				title: "Humidity",
+				label: "%"
+			});
+
+		});
+    </script>
+<script>
+	// 实时报警检测
+	function checkAlerts() {
+		const current_temp = {{ temp }};
+		const current_hum = {{ hum }};
+		const [temp_th, hum_th] = [{{ current_th[3] }}, {{ current_th[4] }}];
+		
+		// 温度报警
+		if(current_temp > temp_th) {
+			document.getElementById('temp_alert').innerHTML = 
+				' 温度超过阈值！当前：' + current_temp + '℃';
+			alert("警告，温度已超过阈值！");
+		} else if(current_temp >= temp_th * 0.9) {
+			document.getElementById('temp_alert').innerHTML = 
+				'敏感温度！当前：' + current_temp + '℃';
+		} else {
+			document.getElementById('temp_alert').innerHTML = '';
+		}
+		
+		// 湿度报警（逻辑同上）
+		if(current_hum > hum_th) {
+			document.getElementById('hum_alert').innerHTML = 
+				'⚠️ 湿度超过阈值！当前：' + current_hum + '℃';
+			alert("警告，湿度已超过阈值！");
+		} else if(current_hum >= hum_th * 0.9) {
+			document.getElementById('hum_alert').innerHTML = 
+				'⚠️ 敏感湿度！当前：' + current_hum + '℃';
+		} else {
+			document.getElementById('hum_alert').innerHTML = '';
+		}
+		// ...（类似温度的处理）
+	}
+	
+	// 表单验证
+	function validateThresholds() {
+		const periods = ['A', 'B', 'C'];
+		let prevEnd = "00:00";
+		
+		for(let p of periods) {
+			const start = document.querySelector(`[name="${p}_start"]`).value;
+			const end = document.querySelector(`[name="${p}_end"]`).value;
+			
+			// 时间连续性验证
+			if(start <= prevEnd) {
+				alert(`请保证时段${p}开始时间晚于前一时段结束时间哦`);
+				return false;
+			}
+			prevEnd = end;
+		}
+		return true;
+	}
+	
+	// 每60秒检查一次
+	setInterval(checkAlerts, 60000);
+	</script>	
+</body>
+
+</html>
+
+
+
+
+
+
+
