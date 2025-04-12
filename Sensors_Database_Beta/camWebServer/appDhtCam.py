@@ -9,6 +9,7 @@ import sqlite3
 from camera_pi2 import Camera
 import time
 from datetime import datetime 
+from Sensors_Database_Beta import logDHT
 
 app = Flask(__name__)
 
@@ -77,25 +78,7 @@ def logFreq(sampleFreq):
     db.commit()
     return None
 
-# 在WebServer.py中添加数据库初始化（只需执行一次）
-# def init_db():
-#     db = sqlite3.connect('../sensorsData.db')
-#     curs = db.cursor()
-#     curs.execute('''CREATE TABLE IF NOT EXISTS thresholds
-#         (period TEXT PRIMARY KEY,
-#         start_time TEXT NOT NULL,
-#         end_time TEXT NOT NULL,
-#         temp_threshold REAL NOT NULL,
-#         hum_threshold REAL NOT NULL)''')
-#     # 插入默认值
-#     curs.execute('''INSERT OR IGNORE INTO thresholds VALUES 
-#         ('A', '00:00', '10:00', 30.0, 40.0),
-#         ('B', '10:01', '15:00', 30.0, 40.0),
-#         ('C', '15:01', '23:59', 30.0, 40.0)''')
-#     db.commit()
-#     return None
 
-# 根据当前系统时间获取当前时段阈值
 def get_current_threshold():
     current_time = datetime.now().strftime("%H:%M")
     db = get_db()
@@ -147,22 +130,23 @@ def getThresholds():
 def index():
     time, temp, hum = getLastData()
 
-    sampleFreq = getLastFreq()  # 获取最新频率
+    sampleFreq = getLastFreq()  # 依次获取最新频率，当前时段阈值，所有时段阈值。
     
-    current_th = get_current_threshold() # 获取当前时段阈值
+    current_th = get_current_threshold() 
 
-    thresholds = getThresholds() # 获取所有时段阈值
+    thresholds = getThresholds() 
 
     templateData = {
         'time': time,
         'temp': temp,
         'hum': hum,
         'numSamples': 100,  
-        'sampleFreq' : sampleFreq, #检测频率
+        'sampleFreq' : sampleFreq, 
         'current_th': current_th,
         'thresholds': thresholds
     }
     return render_template('index.html', **templateData)
+
 # 视频页跳转路由
 @app.route('/camera') 
 def cam():
@@ -199,8 +183,8 @@ def my_form_post():
 # 参数提交路由2 ：数据检测频率
 @app.route('/set_frequency', methods=['POST'])
 def set_frequency():
-    global sampleFreq # 全局变量
-    new_freq = int(request.form['frequency']) # 获取用户输入的频率---<html>中的name 
+    global sampleFreq 
+    new_freq = int(request.form['frequency']) 
     if new_freq > 0:
         sampleFreq = new_freq
     # 将新的频率写入数据库
