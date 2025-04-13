@@ -9,7 +9,7 @@ import sqlite3
 from camera_pi2 import Camera
 import time
 from datetime import datetime 
-from Sensors_Database_Beta import logDHT
+#from Sensors_Database_Beta import logDHT
 
 app = Flask(__name__)
 
@@ -21,7 +21,7 @@ def get_db():
 # 关闭数据库连接
 @app.teardown_appcontext
 def close_db(exception):
-    db = g.pop('db', None) # 从 g 对象中移除 db 键，如果没有则返回 None。
+    db = g.pop('db', None) 
     if db is not None:
         db.close()
 
@@ -97,6 +97,7 @@ def update_thresholds(period, start, end, temp, hum):
         WHERE period=?''', (start, end, temp, hum, period))
     db.commit()
 
+
 # 阈值设置路由
 @app.route('/set_thresholds', methods=['POST'])
 def set_thresholds():
@@ -118,7 +119,7 @@ def set_thresholds():
     except Exception as e:
         return f"<script>alert('设置错误: {str(e)}');window.history.back();</script>"
     
-# getThresholds() 函数用于获取所有时段的阈值
+
 def getThresholds():
     db = get_db()
     curs = db.cursor()
@@ -130,17 +131,17 @@ def getThresholds():
 def index():
     time, temp, hum = getLastData()
 
-    sampleFreq = getLastFreq()  # 依次获取最新频率，当前时段阈值，所有时段阈值。
+    sampleFreq = getLastFreq()  
     
     current_th = get_current_threshold() 
 
     thresholds = getThresholds() 
 
+
     templateData = {
         'time': time,
         'temp': temp,
-        'hum': hum,
-        'numSamples': 100,  
+        'hum': hum, 
         'sampleFreq' : sampleFreq, 
         'current_th': current_th,
         'thresholds': thresholds
@@ -162,23 +163,25 @@ def video_feed():
     return Response(gen(Camera()),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
-# 参数提交路由1：历史数据条数
-@app.route('/set_numSamples', methods=['POST']) ###
-def my_form_post():
-    global numSamples # 全局变量
-    numSamples = int(request.form['numSamples'])
-    numMaxSamples = maxRowsTable()
-    if numSamples > numMaxSamples:
-        numSamples = numMaxSamples - 1
+# 数据库查询路由
+@app.route('/query_history', methods=['POST'])
+def query_history():
+    selected_date = request.form['date']
+    selected_time = request.form['time']
 
-    time, temp, hum = getLastData() 
-    templateData = {
-        'time': time,
-        'temp': temp,
-        'hum': hum,
-        'numSamples': numSamples
-    }
-    return render_template('index.html', **templateData)
+    start_time, end_time = selected_time.split('-')
+    
+    query = """
+        SELECT timestamp, temperature, humidity
+        FROM DHT_data
+        WHERE DATE(timestamp) = ?
+        AND TIME(timestamp) BETWEEN ? AND ?
+    """
+    db = get_db()
+    curs = db.cursor()
+    curs.execute(query, (selected_date, start_time, end_time))
+    rows = curs.fetchall()
+    return render_template('index.html', data=rows)
 
 # 参数提交路由2 ：数据检测频率
 @app.route('/set_frequency', methods=['POST'])
