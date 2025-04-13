@@ -181,7 +181,7 @@ def query_history():
     curs = db.cursor()
     curs.execute(query, (selected_date, start_time, end_time))
     rows = curs.fetchall()
-    return render_template('index.html', data=rows)
+    return render_template('table.html', data=rows)
 
 # 参数提交路由2 ：数据检测频率
 @app.route('/set_frequency', methods=['POST'])
