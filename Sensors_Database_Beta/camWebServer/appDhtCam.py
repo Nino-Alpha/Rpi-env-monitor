@@ -4,7 +4,14 @@
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 import io
-from flask import Flask, render_template, send_file, make_response, request, g, Response,redirect
+from flask import Flask
+from flask import render_template
+from flask import make_response
+from flask import request
+from flask import g
+from flask import Response
+from flask import redirect
+from flask import session
 import sqlite3
 from camera_pi2 import Camera
 import time
@@ -12,7 +19,7 @@ from datetime import datetime
 #from Sensors_Database_Beta import logDHT
 
 app = Flask(__name__)
-
+app.secret_key = '8888'  # 设置session密钥
 # 获取数据库连接 
 def get_db():
     if 'db' not in g:
@@ -130,13 +137,10 @@ def getThresholds():
 @app.route("/")
 def index():
     time, temp, hum = getLastData()
-
     sampleFreq = getLastFreq()  
-    
     current_th = get_current_threshold() 
-
     thresholds = getThresholds() 
-
+    selected_date = session.get('selected_date', None)
 
     templateData = {
         'time': time,
@@ -144,7 +148,8 @@ def index():
         'hum': hum, 
         'sampleFreq' : sampleFreq, 
         'current_th': current_th,
-        'thresholds': thresholds
+        'thresholds': thresholds,
+        'selected_date': selected_date
     }
     return render_template('index.html', **templateData)
 
@@ -170,6 +175,7 @@ def query_history():
     start_time = request.form['start_time']
     end_time = request.form['end_time']
     
+    session['selected_date'] = selected_date
     query = """
         SELECT timestamp, temp, hum
         FROM DHT_data
