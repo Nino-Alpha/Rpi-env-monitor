@@ -167,9 +167,8 @@ def video_feed():
 @app.route('/query_history', methods=['POST'])
 def query_history():
     selected_date = request.form['date']
-    selected_time = request.form['time']
-
-    start_time, end_time = selected_time.split('-')
+    start_time = request.form['start_time']
+    end_time = request.form['end_time']
     
     query = """
         SELECT timestamp, temp, hum
