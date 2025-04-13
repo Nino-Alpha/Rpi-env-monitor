@@ -172,7 +172,7 @@ def query_history():
     start_time, end_time = selected_time.split('-')
     
     query = """
-        SELECT timestamp, temperature, humidity
+        SELECT timestamp, temp, hum
         FROM DHT_data
         WHERE DATE(timestamp) = ?
         AND TIME(timestamp) BETWEEN ? AND ?
