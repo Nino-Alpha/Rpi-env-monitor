@@ -42,17 +42,17 @@ def getLastData():
         return time, temp, hum
     return None, None, None
 
-def getHistData(numSamples):
-    db = get_db()
-    curs = db.cursor()
-    curs.execute("SELECT * FROM DHT_data ORDER BY timestamp DESC LIMIT ?", (numSamples,))
-    data = curs.fetchall()
-    dates, temps, hums = [], [], []
-    for row in reversed(data):
-        dates.append(row[0])
-        temps.append(row[1])
-        hums.append(row[2])
-    return dates, temps, hums
+# def getHistData(numSamples):
+#     db = get_db()
+#     curs = db.cursor()
+#     curs.execute("SELECT * FROM DHT_data ORDER BY timestamp DESC LIMIT ?", (numSamples,))
+#     data = curs.fetchall()
+#     dates, temps, hums = [], [], []
+#     for row in reversed(data):
+#         dates.append(row[0])
+#         temps.append(row[1])
+#         hums.append(row[2])
+#     return dates, temps, hums
 
 def maxRowsTable():
     db = get_db()
@@ -186,8 +186,71 @@ def query_history():
     curs = db.cursor()
     curs.execute(query, (selected_date, start_time, end_time))
     rows = curs.fetchall()
-    return render_template('table.html', data=rows)
+    templateData = {
+        'data': rows,
+        'start_time': start_time,
+        'end_time': end_time,
+        'selected_date': selected_date
+    }
+    return render_template('table.html', **templateData)
 
+#数据库统计路由
+@app.route('/select_graph', methods=['POST'])
+def select_graph():
+    selected_date = request.form['date']
+    start_time = request.form['start_time']
+    end_time = request.form['end_time']
+    
+    query = """
+        SELECT timestamp, temp, hum
+        FROM DHT_data
+        WHERE DATE(timestamp) = ?
+        AND TIME(timestamp) BETWEEN ? AND ?
+    """
+    db = get_db()
+    curs = db.cursor()
+    curs.execute(query, (selected_date, start_time, end_time))
+    rows = curs.fetchall()
+    
+    # 处理数据以生成图表
+    times, temps, hums = [], [], []
+    for row in rows:
+        times.append(row[0])
+        temps.append(row[1])
+        hums.append(row[2])
+    templateData = {
+        'times': times,
+        'temps': temps,
+        'hums': hums, 
+        'start_time': start_time,
+        'end_time': end_time,
+        'selected_date': selected_date
+    }
+    return render_template('graphs.html', **templateData)
+#中转路由
+@app.route('/table_graphs', methods=['POST'])
+def table_graphs(): 
+    #从table.html接收数据
+    rows = request.form.getlist('rows[]') 
+    selected_date = request.form['selected_date']
+    start_time = request.form['start_time']
+    end_time = request.form['end_time']
+    # 处理数据以生成图表
+    times, temps, hums = [], [], []
+    for row in rows:
+        times.append(row[0])
+        temps.append(row[1])
+        hums.append(row[2])
+
+    templateData = {
+        'times': times,
+        'temps': temps,
+        'hums': hums, 
+        'start_time': start_time,
+        'end_time': end_time,
+        'selected_date': selected_date
+    }
+    return render_template('graphs.html', **templateData)
 # 参数提交路由2 ：数据检测频率
 @app.route('/set_frequency', methods=['POST'])
 def set_frequency():
@@ -212,14 +275,16 @@ def set_frequency():
 # 温度图表路由
 @app.route('/plot/temp')
 def plot_temp():
-    numSamples = int(request.args.get('numSamples', 100))  
-    times, temps, hums = getHistData(numSamples)
+    # numSamples = int(request.args.get('numSamples', 100))  
+    # times, temps, hums = getHistData(numSamples) 由于不再依赖输入样本数。所以要通过网页直接获取数据。
+    # 从html接收times, temps, hums
+    temps = request.args.getlist('temps[]')
     fig = Figure()
     axis = fig.add_subplot(1, 1, 1)
     axis.set_title("Temperature [°C]")
     axis.set_xlabel("Samples")
     axis.grid(True)
-    xs = range(numSamples)
+    xs = range(len(temps))   # 要将x轴的范围改为len(temps)。
     axis.plot(xs, temps)
     canvas = FigureCanvas(fig)
     output = io.BytesIO()
@@ -230,14 +295,16 @@ def plot_temp():
 # 湿度图表路由
 @app.route('/plot/hum')
 def plot_hum():
-    numSamples = int(request.args.get('numSamples', 100))  
-    times, temps, hums = getHistData(numSamples)
+    # numSamples = int(request.args.get('numSamples', 100))  
+    # times, temps, hums = getHistData(numSamples)
+
+    hums = request.args.getlist('hums[]')
     fig = Figure()
     axis = fig.add_subplot(1, 1, 1)
     axis.set_title("Humidity [%]")
     axis.set_xlabel("Samples")
     axis.grid(True)
-    xs = range(numSamples)
+    xs = range(len(hums))
     axis.plot(xs, hums)
     canvas = FigureCanvas(fig)
     output = io.BytesIO()

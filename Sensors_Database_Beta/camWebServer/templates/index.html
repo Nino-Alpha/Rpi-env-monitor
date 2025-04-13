@@ -134,24 +134,74 @@
 			<button type="submit">查询</button>
 			
 		</form>
-		<script>
-			function validateTime() {
-				// 获取开始时间和结束时间
-				const startTime = document.getElementById('start_time').value;
-				const endTime = document.getElementById('end_time').value;
-			
-				// 比较时间
-				if (startTime >= endTime) {
-					alert('开始时间不能超过结束时间，请重新选择！');
-					return false; // 阻止表单提交
-				}
-				return true; // 允许表单提交
-			}
-			</script>
+
 		<hr>
-		<img src="/plot/temp" alt="Image Placeholder" width="49%">
-		<img src="/plot/hum" alt="Image Placeholder" width="49%">
+		<p>样本折线图</p>
+		<!--选择统计时间段-->
+		<h3> 选择统计时段 </h3>
+		<form method="POST" action="/select_graph" onsubmit="return validateTime()">
+			<label for="date">选择日期：</label>
+			<input type="date" id="date" name="date" value="{{ selected_date2 }}" required>
 	
+			<label for="start_time">开始时间：</label>
+			<select id="start_time" name="start_time" required>
+				<option value="00:00">00:00</option>
+				<option value="01:00">01:00</option>
+				<option value="02:00">02:00</option>
+				<option value="03:00">03:00</option>
+				<option value="04:00">04:00</option>
+				<option value="05:00">05:00</option>
+				<option value="06:00">06:00</option>
+				<option value="07:00">07:00</option>
+				<option value="08:00">08:00</option>
+				<option value="09:00">09:00</option>
+				<option value="10:00">10:00</option>
+				<option value="11:00">11:00</option>
+				<option value="12:00">12:00</option>
+				<option value="13:00">13:00</option>
+				<option value="14:00">14:00</option>
+				<option value="15:00">15:00</option>
+				<option value="16:00">16:00</option>
+				<option value="17:00">17:00</option>
+				<option value="18:00">18:00</option>
+				<option value="19:00">19:00</option>
+				<option value="20:00">20:00</option>
+				<option value="21:00">21:00</option>
+				<option value="22:00">22:00</option>
+				<option value="23:00">23:00</option>
+			</select>
+			<label for="end_time">结束时间：</label>
+			<select id="end_time" name="end_time" required>
+				<option value="01:00">01:00</option>
+				<option value="02:00">02:00</option>
+				<option value="03:00">03:00</option>
+				<option value="04:00">04:00</option>
+				<option value="05:00">05:00</option>
+				<option value="06:00">06:00</option>
+				<option value="07:00">07:00</option>
+				<option value="08:00">08:00</option>
+				<option value="09:00">09:00</option>
+				<option value="10:00">10:00</option>
+				<option value="11:00">11:00</option>
+				<option value="12:00">12:00</option>
+				<option value="13:00">13:00</option>
+				<option value="14:00">14:00</option>
+				<option value="15:00">15:00</option>
+				<option value="16:00">16:00</option>
+				<option value="17:00">17:00</option>
+				<option value="18:00">18:00</option>
+				<option value="19:00">19:00</option>
+				<option value="20:00">20:00</option>
+				<option value="21:00">21:00</option>
+				<option value="22:00">22:00</option>
+				<option value="23:00">23:00</option>
+				<option value="00:00">00:00</option>
+			</select>
+			<button type="submit">统计结果</button>
+			
+		</form>
+		<hr>
+		<!--其他统计图-->
 	<p> @2025 Developed by Ningchy , BUPT 2021210585 </p>
     
     <script src="../static/raphael-2.1.4.min.js"></script>
@@ -238,6 +288,20 @@
 	// 每60秒检查一次
 	setInterval(checkAlerts, 60000);
 	</script>	
+	<script>
+		function validateTime() {
+			// 获取开始时间和结束时间
+			const startTime = document.getElementById('start_time').value;
+			const endTime = document.getElementById('end_time').value;
+		
+			// 比较时间
+			if (startTime >= endTime) {
+				alert('开始时间不能超过结束时间，请重新选择！');
+				return false; // 阻止表单提交
+			}
+			return true; // 允许表单提交
+		}
+		</script>
 </body>
 
 </html>
