@@ -16,7 +16,7 @@
     <h1>统计结果</h1>
     <p>样本折线图</p>
     <!--显示统计时间段-->
-    <h3>当前时段：{{ selected_date }} {{ start_time }} ~ {{ end_time }}</h3>
+    <h3>当前时段：{{ selected_date2 }} {{ start_time }} ~ {{ end_time }}</h3>
     <img src="{{ plot_url_temp }}" alt="温度图" width="49%">
     <img src="{{ plot_url_hum }}" alt="湿度图" width="49%">
     <!--重新选择统计时间段-->
@@ -27,7 +27,7 @@
 			{% from "_macros.html" import time_selectors %}
 
 			<!-- 调用宏 -->
-			{{ time_selectors() }}
+			{{ time_selectors(selected_date=selected_date2) }}
 			
 			<button type="submit">统计</button>
 			

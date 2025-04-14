@@ -79,7 +79,7 @@
 			{% from "_macros.html" import time_selectors %}
 
 			<!-- 调用宏 -->
-			{{ time_selectors() }}
+			{{ time_selectors(selected_date=selected_date1) }}
 
 			<button type="submit">查询</button>
 			
@@ -94,7 +94,7 @@
 			{% from "_macros.html" import time_selectors %}
 
 			<!-- 调用宏 -->
-			{{ time_selectors() }}
+			{{ time_selectors(selected_date=selected_date2) }}
 			
 			<button type="submit">统计结果</button>
 			

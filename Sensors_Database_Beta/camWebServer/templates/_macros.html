@@ -1,8 +1,8 @@
 <!-- _macros.html -->
-{% macro time_selectors(start_time='00:00', end_time='01:00') %}
+{% macro time_selectors(selected_date='',start_time='00:00', end_time='01:00') %}
     <label for="date">选择日期：</label>
-    <input type="date" id="date" name="date" value="{{ selected_date2 }}" required>
-    
+    <input type="date" id="date" name="date" value="{{ selected_date }}" required>
+
     <label for="start_time">开始时间：</label>
     <select id="start_time" name="start_time" required>
         {% for hour in range(24) %}

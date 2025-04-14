@@ -141,7 +141,8 @@ def index():
     sampleFreq = getLastFreq()  
     current_th = get_current_threshold() 
     thresholds = getThresholds() 
-    selected_date = session.get('selected_date', None)
+    selected_date1 = session.get('selected_date1', None)
+    selected_date2 = session.get('selected_date2', None)
 
     templateData = {
         'time': time,
@@ -150,7 +151,8 @@ def index():
         'sampleFreq' : sampleFreq, 
         'current_th': current_th,
         'thresholds': thresholds,
-        'selected_date': selected_date
+        'selected_date1': selected_date1,
+        'selected_date2': selected_date2
     }
     return render_template('index.html', **templateData)
 
@@ -172,11 +174,11 @@ def video_feed():
 # 数据库查询路由
 @app.route('/query_history', methods=['POST'])
 def query_history():
-    selected_date = request.form['date']
+    selected_date1 = request.form['date']
     start_time = request.form['start_time']
     end_time = request.form['end_time']
     
-    session['selected_date'] = selected_date
+    session['selected_date1'] = selected_date1
     query = """
         SELECT timestamp, temp, hum
         FROM DHT_data
@@ -185,23 +187,23 @@ def query_history():
     """
     db = get_db()
     curs = db.cursor()
-    curs.execute(query, (selected_date, start_time, end_time))
+    curs.execute(query, (selected_date1, start_time, end_time))
     rows = curs.fetchall()
 
     templateData = {
-        'data': rows,
-        # 'start_time': start_time,
-        # 'end_time': end_time,
-        # 'selected_date': selected_date
+        'data': rows
+
     }
     return render_template('table.html', **templateData)
 
 #数据库统计路由
 @app.route('/select_graph', methods=['POST'])
 def select_graph():
-    selected_date = request.form['date']
+    selected_date2 = request.form['date']
     start_time = request.form['start_time']
     end_time = request.form['end_time']
+    
+    session['selected_date2'] = selected_date2
     
     query = """
         SELECT timestamp, temp, hum
@@ -211,7 +213,7 @@ def select_graph():
     """
     db = get_db()
     curs = db.cursor()
-    curs.execute(query, (selected_date, start_time, end_time))
+    curs.execute(query, (selected_date2, start_time, end_time))
     rows = curs.fetchall()
     
     # 处理数据以生成图表
@@ -252,7 +254,7 @@ def select_graph():
         'hums': hums, 
         'start_time': start_time,
         'end_time': end_time,
-        'selected_date': selected_date,
+        'selected_date2': selected_date2,
         'plot_url_temp': plot_url_temp,  # 温度图像URL
         'plot_url_hum': plot_url_hum    # 湿度图像URL
     }
