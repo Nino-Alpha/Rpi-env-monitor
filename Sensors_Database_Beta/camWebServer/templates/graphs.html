@@ -11,6 +11,7 @@
 		}
         
     </style>
+	<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
     <h1>统计结果</h1>
@@ -19,6 +20,7 @@
     <h3>当前时段：{{ selected_date2 }} {{ start_time }} ~ {{ end_time }}</h3>
     <img src="{{ plot_url_temp }}" alt="温度图" width="49%">
     <img src="{{ plot_url_hum }}" alt="湿度图" width="49%">
+	<div>{{ plot_div | safe }}</div>
     <!--重新选择统计时间段-->
     <h3> 选择统计时段 </h3>
 		<form method="POST" action="/select_graph" onsubmit="return validateTime()">		
@@ -52,5 +54,6 @@
                 return true; // 允许表单提交
             }
             </script>
+			
 </body>
 </html>

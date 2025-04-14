@@ -6,7 +6,6 @@ from matplotlib.figure import Figure
 import io
 from flask import Flask
 from flask import render_template
-from flask import make_response
 from flask import request
 from flask import g
 from flask import Response
@@ -17,6 +16,8 @@ from camera_pi2 import Camera
 import time
 from datetime import datetime 
 import base64
+import plotly.graph_objs as go
+import plotly.offline as pyo
 #from Sensors_Database_Beta import logDHT
 
 app = Flask(__name__)
@@ -202,7 +203,7 @@ def select_graph():
     selected_date2 = request.form['date']
     start_time = request.form['start_time']
     end_time = request.form['end_time']
-    
+
     session['selected_date2'] = selected_date2
     
     query = """
@@ -222,7 +223,7 @@ def select_graph():
         times.append(row[0])
         temps.append(row[1])
         hums.append(row[2])
-      # 绘制温度图像
+# 绘制温度图像
     fig_temp = Figure()
     axis_temp = fig_temp.add_subplot(1, 1, 1)
     axis_temp.set_title("Temperature [°C]")
@@ -230,11 +231,22 @@ def select_graph():
     axis_temp.grid(True)
     xs = range(len(temps))
     axis_temp.plot(xs, temps)    
+    axis_temp.set_ylim(10, 45)  # 设置纵轴范围为10到45
         # 将温度图像转换为PNG格式
     canvas_temp = FigureCanvas(fig_temp)
     output_temp = io.BytesIO()
     canvas_temp.print_png(output_temp)
     plot_url_temp = f"data:image/png;base64,{base64.b64encode(output_temp.getvalue()).decode('utf-8')}"
+# 使用Plotly绘制温度图像
+    trace = go.Scatter(x=times, y=temps, mode='lines', name='温度 (°C)')
+    layout = go.Layout(
+        title='温度随时间变化趋势',
+        xaxis=dict(title='时间'),
+        yaxis=dict(title='温度 (°C)', range=[20, 40]),  # 固定纵轴范围
+        hovermode='x unified'
+    )
+    fig = go.Figure(data=[trace], layout=layout)
+    plot_div = pyo.plot(fig, output_type='div', include_plotlyjs=False)
         # 绘制湿度图像
     fig_hum = Figure() 
     axis_hum = fig_hum.add_subplot(1, 1, 1)
@@ -243,6 +255,7 @@ def select_graph():
     axis_hum.grid(True)
     xs = range(len(hums))
     axis_hum.plot(xs, hums)
+    axis_hum.set_ylim(10, 80)
         # 将湿度图像转换为PNG格式
     canvas_hum = FigureCanvas(fig_hum)
     output_hum = io.BytesIO()
@@ -256,6 +269,7 @@ def select_graph():
         'end_time': end_time,
         'selected_date2': selected_date2,
         'plot_url_temp': plot_url_temp,  # 温度图像URL
+        'plot_div': plot_div, # Plotly图像的HTML代码
         'plot_url_hum': plot_url_hum    # 湿度图像URL
     }
     return render_template('graphs.html', **templateData)
@@ -295,4 +309,4 @@ def getFirstData():
     return None, None, None
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=80, debug=True, threaded=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

@@ -154,11 +154,11 @@
 		// 湿度报警（逻辑同上）
 		if(current_hum > hum_th) {
 			document.getElementById('hum_alert').innerHTML = 
-				'⚠️ 湿度超过阈值！当前：' + current_hum + '℃';
+				'⚠️ 湿度超过阈值！当前：' + current_hum + '%';
 			alert("警告，湿度已超过阈值！");
 		} else if(current_hum >= hum_th * 0.9) {
 			document.getElementById('hum_alert').innerHTML = 
-				'⚠️ 敏感湿度！当前：' + current_hum + '℃';
+				'⚠️ 敏感湿度！当前：' + current_hum + '%';
 		} else {
 			document.getElementById('hum_alert').innerHTML = '';
 		}

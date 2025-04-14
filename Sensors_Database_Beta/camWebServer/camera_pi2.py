@@ -2,6 +2,8 @@ import time
 import io
 import threading
 from picamera2 import Picamera2
+import sys
+sys.path.append('/usr/lib/python3/dist-packages')
 from libcamera import Transform
 
 class Camera(object):

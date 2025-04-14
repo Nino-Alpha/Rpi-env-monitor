@@ -1,19 +1,37 @@
 import time
+import board
 import sqlite3
-import Adafruit_DHT
-
+import adafruit_dht
+import os
+os.environ["BLINKA_FORCEBOARD"] = "RASPBERRY_PI_4B"  # 强制指定树莓派 4B
 dbname='sensorsData.db'
+print("Board attributes:", dir(board))
+print(board.__file__)  # 打印 board 模块的文件路径
 
-def getDHTdata():	
-	
-	DHT11Sensor = Adafruit_DHT.DHT11
-	DHTpin = 17
-	hum, temp = Adafruit_DHT.read_retry(DHT11Sensor, DHTpin)
-	
-	if hum is not None and temp is not None:
-		hum = round(hum)
-		temp = round(temp, 1)
-	return temp, hum
+def getDHTdata(retries=5):
+    dht = adafruit_dht.DHT11(board.D17, use_pulseio=False)  # GPIO 17 引脚
+
+    try:
+        for _ in range(retries):
+            try:
+                # 读取温湿度数据
+                temp = dht.temperature
+                hum = dht.humidity
+                if hum is not None and temp is not None:
+                    hum = round(hum)
+                    temp = round(temp, 1)
+                    return temp, hum
+                else:
+                    print("Failed to read sensor data. Retrying...")
+            except RuntimeError as e:
+                print(f"Error reading sensor: {e}. Retrying...")
+            time.sleep(2)  # 等待 2 秒后重试
+
+        print("Max retries reached. Failed to read sensor data.")
+        return None, None
+    finally:
+        # 清理传感器资源
+        dht.exit()
 
 def logData (temp, hum):
 	
