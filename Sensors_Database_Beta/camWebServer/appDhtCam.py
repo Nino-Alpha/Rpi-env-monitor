@@ -16,6 +16,7 @@ import sqlite3
 from camera_pi2 import Camera
 import time
 from datetime import datetime 
+import base64
 #from Sensors_Database_Beta import logDHT
 
 app = Flask(__name__)
@@ -189,9 +190,9 @@ def query_history():
 
     templateData = {
         'data': rows,
-        'start_time': start_time,
-        'end_time': end_time,
-        'selected_date': selected_date
+        # 'start_time': start_time,
+        # 'end_time': end_time,
+        # 'selected_date': selected_date
     }
     return render_template('table.html', **templateData)
 
@@ -219,39 +220,45 @@ def select_graph():
         times.append(row[0])
         temps.append(row[1])
         hums.append(row[2])
+      # 绘制温度图像
+    fig_temp = Figure()
+    axis_temp = fig_temp.add_subplot(1, 1, 1)
+    axis_temp.set_title("Temperature [°C]")
+    axis_temp.set_xlabel("Samples")
+    axis_temp.grid(True)
+    xs = range(len(temps))
+    axis_temp.plot(xs, temps)    
+        # 将温度图像转换为PNG格式
+    canvas_temp = FigureCanvas(fig_temp)
+    output_temp = io.BytesIO()
+    canvas_temp.print_png(output_temp)
+    plot_url_temp = f"data:image/png;base64,{base64.b64encode(output_temp.getvalue()).decode('utf-8')}"
+        # 绘制湿度图像
+    fig_hum = Figure() 
+    axis_hum = fig_hum.add_subplot(1, 1, 1)
+    axis_hum.set_title("Humidity [%]")
+    axis_hum.set_xlabel("Samples")
+    axis_hum.grid(True)
+    xs = range(len(hums))
+    axis_hum.plot(xs, hums)
+        # 将湿度图像转换为PNG格式
+    canvas_hum = FigureCanvas(fig_hum)
+    output_hum = io.BytesIO()
+    canvas_hum.print_png(output_hum)
+    plot_url_hum = f"data:image/png;base64,{base64.b64encode(output_hum.getvalue()).decode('utf-8')}"
     templateData = {
         'times': times,
         'temps': temps,
         'hums': hums, 
         'start_time': start_time,
         'end_time': end_time,
-        'selected_date': selected_date
+        'selected_date': selected_date,
+        'plot_url_temp': plot_url_temp,  # 温度图像URL
+        'plot_url_hum': plot_url_hum    # 湿度图像URL
     }
     return render_template('graphs.html', **templateData)
 #中转路由
-@app.route('/table_graphs', methods=['POST'])
-def table_graphs(): 
-    #从table.html接收数据
-    rows = request.form.getlist('rows[]') 
-    selected_date = request.form['selected_date']
-    start_time = request.form['start_time']
-    end_time = request.form['end_time']
-    # 处理数据以生成图表
-    times, temps, hums = [], [], []
-    for row in rows:
-        times.append(row[0])
-        temps.append(row[1])
-        hums.append(row[2])
 
-    templateData = {
-        'times': times,
-        'temps': temps,
-        'hums': hums, 
-        'start_time': start_time,
-        'end_time': end_time,
-        'selected_date': selected_date
-    }
-    return render_template('graphs.html', **templateData)
 # 参数提交路由2 ：数据检测频率
 @app.route('/set_frequency', methods=['POST'])
 def set_frequency():
@@ -273,46 +280,6 @@ def set_frequency():
     }
     return render_template('index.html', **templateData)
 
-# 温度图表路由
-@app.route('/plot/temp')
-def plot_temp():
-    # numSamples = int(request.args.get('numSamples', 100))  
-    # times, temps, hums = getHistData(numSamples) 由于不再依赖输入样本数。所以要通过网页直接获取数据。
-    # 从html接收times, temps, hums
-    temps = request.args.getlist('temps[]')
-    fig = Figure()
-    axis = fig.add_subplot(1, 1, 1)
-    axis.set_title("Temperature [°C]")
-    axis.set_xlabel("Samples")
-    axis.grid(True)
-    xs = range(len(temps))   # 要将x轴的范围改为len(temps)。
-    axis.plot(xs, temps)
-    canvas = FigureCanvas(fig)
-    output = io.BytesIO()
-    canvas.print_png(output)
-    response = make_response(output.getvalue())
-    response.mimetype = 'image/png'
-    return response
-# 湿度图表路由
-@app.route('/plot/hum')
-def plot_hum():
-    # numSamples = int(request.args.get('numSamples', 100))  
-    # times, temps, hums = getHistData(numSamples)
-
-    hums = request.args.getlist('hums[]')
-    fig = Figure()
-    axis = fig.add_subplot(1, 1, 1)
-    axis.set_title("Humidity [%]")
-    axis.set_xlabel("Samples")
-    axis.grid(True)
-    xs = range(len(hums))
-    axis.plot(xs, hums)
-    canvas = FigureCanvas(fig)
-    output = io.BytesIO()
-    canvas.print_png(output)
-    response = make_response(output.getvalue())
-    response.mimetype = 'image/png'
-    return response
 
 #获取第一条数据（作为系统启动时间）
 def getFirstData():

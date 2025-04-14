@@ -17,8 +17,8 @@
     <p>样本折线图</p>
     <!--显示统计时间段-->
     <h3>当前时段：{{ selected_date }} {{ start_time }} ~ {{ end_time }}</h3>
-    <img src="/plot/temp" alt="Image Placeholder" width="49%">
-    <img src="/plot/hum" alt="Image Placeholder" width="49%">
+    <img src="{{ plot_url_temp }}" alt="温度图" width="49%">
+    <img src="{{ plot_url_hum }}" alt="湿度图" width="49%">
     <!--重新选择统计时间段-->
     <h3> 选择统计时段 </h3>
 		<form method="POST" action="/select_graph" onsubmit="return validateTime()">		
@@ -28,6 +28,7 @@
 
 			<!-- 调用宏 -->
 			{{ time_selectors() }}
+			
 			<button type="submit">统计</button>
 			
 		</form>
