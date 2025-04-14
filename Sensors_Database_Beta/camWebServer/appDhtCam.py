@@ -186,6 +186,7 @@ def query_history():
     curs = db.cursor()
     curs.execute(query, (selected_date, start_time, end_time))
     rows = curs.fetchall()
+    
     templateData = {
         'data': rows,
         'start_time': start_time,
