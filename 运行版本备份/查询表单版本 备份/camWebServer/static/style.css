@@ -1,0 +1,37 @@
+body{
+	background: rgb(67, 64, 64);  /**rgb(241, 143, 143),black**/
+	color: white;
+	padding:1%
+}
+/*按钮样式*/
+.button {
+	font: bold 15px Arial;
+	text-decoration: none;
+	background-color: #EEEEEE;
+	color: #333333;
+	padding: 2px 6px;
+	border: 1px solid #CCCCCC;
+	border-right: 1px solid #333333;
+	border-bottom: 1px solid #333333;
+  }
+  
+  .button:hover {
+	background-color: #989595;
+	color: #000000;
+  }
+
+  /* 自定义按钮样式,暂未投入使用 */
+.custom-button {  
+    background-color: #4CAF50; /* 默认背景颜色 */
+    color: white; /* 默认文字颜色 */
+    padding: 10px 20px; /* 内边距 */
+    border: none; /* 去掉边框 */
+    border-radius: 5px; /* 圆角 */
+    cursor: pointer; /* 鼠标指针样式 */
+    transition: background-color 0.3s ease; /* 背景颜色过渡效果 */
+}
+
+.custom-button:hover {
+    background-color: #45a049; /* 悬停时的背景颜色 */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* 悬停时的阴影效果 */
+}
