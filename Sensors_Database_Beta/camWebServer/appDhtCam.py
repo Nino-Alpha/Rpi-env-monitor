@@ -206,6 +206,7 @@ def index():
     thresholds = getThresholds() 
     selected_date1 = session.get('selected_date1', None)
     selected_date2 = session.get('selected_date2', None)
+    selected_date3 = session.get('selected_date3', None)
 
     templateData = {
         'time': time,
@@ -215,7 +216,8 @@ def index():
         'current_th': current_th,
         'thresholds': thresholds,
         'selected_date1': selected_date1,
-        'selected_date2': selected_date2
+        'selected_date2': selected_date2,
+        'selected_date3': selected_date3
     }
     return render_template('index.html', **templateData)
 
@@ -403,6 +405,32 @@ def check_alarm():
         return jsonify(alarm_status)
     
     return jsonify({'error': '无法获取数据'})
+# 报警历史查询路由
+@app.route('/query_alarm_history', methods=['POST'])
+def query_alarm_history():
+    selected_date = request.form['date']
+    start_time = request.form['start_time']
+    end_time = request.form['end_time']
+    
+    db = get_db()
+    curs = db.cursor()
+    query = """
+        SELECT timestamp, alarm_type, current_value, threshold 
+        FROM alarm_logs
+        WHERE DATE(timestamp) = ?
+        AND TIME(timestamp) BETWEEN ? AND ?
+        ORDER BY timestamp DESC
+    """
+    curs.execute(query, (selected_date, start_time, end_time))
+    rows = curs.fetchall()
+
+    templateData = {
+        'alarm_data': rows,
+        'selected_date': selected_date,
+        'start_time': start_time,
+        'end_time': end_time
+    }
+    return render_template('index.html', **templateData)
 
 if __name__ == "__main__":
     # 启动后台监控
