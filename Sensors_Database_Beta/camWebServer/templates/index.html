@@ -135,72 +135,74 @@
 <script>
 	// 实时报警检测
 	function checkAlerts() {
-		const current_temp = {{ temp }};
-		const current_hum = {{ hum }};
-		const [temp_th, hum_th] = [{{ current_th[3] }}, {{ current_th[4] }}];
-		
-		// 温度报警
-		if(current_temp > temp_th) {
-			document.getElementById('temp_alert').innerHTML = 
-				' 温度超过阈值！当前：' + current_temp + '℃';
-			alert("警告，温度已超过阈值！");
-		} else if(current_temp >= temp_th * 0.9) {
-			document.getElementById('temp_alert').innerHTML = 
-				'敏感温度！当前：' + current_temp + '℃';
-		} else {
-			document.getElementById('temp_alert').innerHTML = '';
-		}
-		
-		// 湿度报警（逻辑同上）
-		if(current_hum > hum_th) {
-			document.getElementById('hum_alert').innerHTML = 
-				'⚠️ 湿度超过阈值！当前：' + current_hum + '%';
-			alert("警告，湿度已超过阈值！");
-		} else if(current_hum >= hum_th * 0.9) {
-			document.getElementById('hum_alert').innerHTML = 
-				'⚠️ 敏感湿度！当前：' + current_hum + '%';
-		} else {
-			document.getElementById('hum_alert').innerHTML = '';
-		}
-		// ...（类似温度的处理）
-	}
+    fetch('/check_alarm')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error(data.error);
+                return;
+            }
+
+            // 温度报警处理
+            const tempAlert = document.getElementById('temp_alert');
+            if (data.temperature.alarm) {
+                tempAlert.innerHTML = `⚠️ 温度报警！当前：${data.temperature.value}℃ (阈值：${data.temperature.threshold}℃)`;
+                tempAlert.style.color = 'red';
+            } else {
+                tempAlert.innerHTML = '';
+            }
+
+            // 湿度报警处理
+            const humAlert = document.getElementById('hum_alert');
+            if (data.humidity.alarm) {
+                humAlert.innerHTML = `⚠️ 湿度报警！当前：${data.humidity.value}% (阈值：${data.humidity.threshold}%)`;
+                humAlert.style.color = 'red';
+            } else {
+                humAlert.innerHTML = '';
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
 	
 	// 表单验证
-	function validateThresholds() {
-		const periods = ['A', 'B', 'C'];
-		let prevEnd = "00:00";
-		
-		for(let p of periods) {
-			const start = document.querySelector(`[name="${p}_start"]`).value;
-			const end = document.querySelector(`[name="${p}_end"]`).value;
-			
-			// 时间连续性验证
-			if(start <= prevEnd) {
-				alert(`请保证时段${p}开始时间晚于前一时段结束时间哦`);
-				return false;
-			}
-			prevEnd = end;
-		}
-		return true;
+	// 通用时间验证函数
+	function validateTimeRange(startTime, endTime, errorMessage) {
+	    if (startTime >= endTime) {
+	        alert(errorMessage);
+	        return false;
+	    }
+	    return true;
 	}
 	
-	// 每60秒检查一次
-	setInterval(checkAlerts, 60000);
+	// 修改后的validateThresholds
+	function validateThresholds() {
+	    const periods = ['A', 'B', 'C'];
+	    let prevEnd = "00:00";
+	    
+	    for(let p of periods) {
+	        const start = document.querySelector(`[name="${p}_start"]`).value;
+	        const end = document.querySelector(`[name="${p}_end"]`).value;
+	        
+	        if (!validateTimeRange(start, end, `请保证时段${p}开始时间晚于前一时段结束时间哦`)) {
+	            return false;
+	        }
+	        prevEnd = end;
+	    }
+	    return true;
+	}
+	
+	// 修改后的validateTime
+	function validateTime() {
+	    const startTime = document.getElementById('start_time').value;
+	    const endTime = document.getElementById('end_time').value;
+	    return validateTimeRange(startTime, endTime, '开始时间不能超过结束时间，请重新选择！');
+	}
+	
+	// 每10秒检查一次报警状态
+	setInterval(checkAlerts, 10000);
+	window.onload = checkAlerts;// 页面加载时立即检查
 	</script>	
-	<script>
-		function validateTime() {
-			// 获取开始时间和结束时间
-			const startTime = document.getElementById('start_time').value;
-			const endTime = document.getElementById('end_time').value;
-		
-			// 比较时间
-			if (startTime >= endTime) {
-				alert('开始时间不能超过结束时间，请重新选择！');
-				return false; // 阻止表单提交
-			}
-			return true; // 允许表单提交
-		}
-		</script>
+	
 </body>
 
 </html>

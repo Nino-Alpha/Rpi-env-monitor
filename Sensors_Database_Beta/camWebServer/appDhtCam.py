@@ -18,10 +18,30 @@ from datetime import datetime
 import base64
 import plotly.graph_objs as go
 import plotly.offline as pyo
+import smtplib
+from email.mime.text import MIMEText
+from email.header import Header
+from threading import Thread
+
 #from Sensors_Database_Beta import logDHT
 
 app = Flask(__name__)
-app.secret_key = '8888'  # 设置session密钥
+# 设置session密钥
+app.secret_key = '8888'  
+# 邮件配置
+EMAIL_CONFIG = {
+    'smtp_server': 'smtp.example.com',  # SMTP服务器地址
+    'smtp_port': 587,  # SMTP端口
+    'sender_email': 'your_email@example.com',  # 发件邮箱
+    'sender_password': 'your_password',  # 发件邮箱密码
+    'receiver_email': 'receiver@example.com',  # 收件邮箱
+    'min_interval': 300  # 最小发送间隔，单位秒（5分钟）  
+}
+# 全局变量记录上次发送时间
+last_email_sent = {
+    'temperature': 0,
+    'humidity': 0
+}
 # 获取数据库连接 
 def get_db():
     if 'db' not in g:
@@ -43,18 +63,6 @@ def getLastData():
         time, temp, hum = str(row[0]), row[1], row[2]
         return time, temp, hum
     return None, None, None
-
-# def getHistData(numSamples):
-#     db = get_db()
-#     curs = db.cursor()
-#     curs.execute("SELECT * FROM DHT_data ORDER BY timestamp DESC LIMIT ?", (numSamples,))
-#     data = curs.fetchall()
-#     dates, temps, hums = [], [], []
-#     for row in reversed(data):
-#         dates.append(row[0])
-#         temps.append(row[1])
-#         hums.append(row[2])
-#     return dates, temps, hums
 
 def maxRowsTable():
     db = get_db()
@@ -87,7 +95,6 @@ def logFreq(sampleFreq):
     db.commit()
     return None
 
-
 def get_current_threshold():
     current_time = datetime.now().strftime("%H:%M")
     db = get_db()
@@ -106,6 +113,61 @@ def update_thresholds(period, start, end, temp, hum):
         WHERE period=?''', (start, end, temp, hum, period))
     db.commit()
 
+# 邮件发送函数
+def send_email(subject, content):
+    try:
+        # 检查是否在冷却时间内
+        current_time = time.time()
+        if subject == '温度报警' and current_time - last_email_sent['temperature'] < EMAIL_CONFIG['min_interval']:
+            return
+        if subject == '湿度报警' and current_time - last_email_sent['humidity'] < EMAIL_CONFIG['min_interval']:
+            return
+        msg = MIMEText(content, 'plain', 'utf-8')
+        msg['Subject'] = Header(subject, 'utf-8')
+        msg['From'] = EMAIL_CONFIG['sender_email']
+        msg['To'] = EMAIL_CONFIG['receiver_email']
+
+        with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
+            server.starttls()
+            server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
+            server.sendmail(EMAIL_CONFIG['sender_email'], [EMAIL_CONFIG['receiver_email']], msg.as_string())
+    # 更新上次发送时间
+        if subject == '温度报警':
+            last_email_sent['temperature'] = current_time
+        elif subject == '湿度报警':
+            last_email_sent['humidity'] = current_time
+    except Exception as e:
+        print(f"邮件发送失败: {e}")
+
+# 后台监控任务
+def background_monitor():
+    while True:
+        try:
+            # 获取最新数据
+            temp, hum = getDHTdata()
+            current_th = get_current_threshold()
+
+            if temp is not None and hum is not None and current_th:
+                # 检查温度
+                if temp > current_th[3]:
+                    send_email('温度报警', f'当前温度 {temp}℃ 超过阈值 {current_th[3]}℃')
+                    log_alarm('temperature', temp, current_th[3])
+                # 检查湿度
+                if hum > current_th[4]:
+                    send_email('湿度报警', f'当前湿度 {hum}% 超过阈值 {current_th[4]}%')
+                    log_alarm('humidity', hum, current_th[4])
+            # 每60秒检查一次
+            time.sleep(60)
+        except Exception as e:
+            print(f"后台监控出错: {e}")
+            time.sleep(60)
+# 新增报警记录函数
+def log_alarm(alarm_type, current_value, threshold):
+    db = get_db()
+    curs = db.cursor()
+    curs.execute("INSERT INTO alarm_logs (timestamp, alarm_type, current_value, threshold) VALUES (datetime('now','localtime'), ?, ?, ?)",
+                 (alarm_type, current_value, threshold))
+    db.commit()
 
 # 阈值设置路由
 @app.route('/set_thresholds', methods=['POST'])
@@ -296,7 +358,6 @@ def set_frequency():
     }
     return render_template('index.html', **templateData)
 
-
 #获取第一条数据（作为系统启动时间）
 def getFirstData():
     db = get_db()
@@ -308,5 +369,43 @@ def getFirstData():
         return time, temp, hum
     return None, None, None
 
+@app.route('/check_alarm')
+def check_alarm():
+    # 获取最新温湿度数据
+    db = get_db()
+    curs = db.cursor()
+    curs.execute("SELECT * FROM DHT_data ORDER BY timestamp DESC LIMIT 1")
+    latest_data = curs.fetchone()
+    
+    # 获取当前时段阈值
+    current_th = get_current_threshold()
+    
+    if latest_data and current_th:
+        temp = latest_data[1]
+        hum = latest_data[2]
+        temp_th = current_th[3]
+        hum_th = current_th[4]
+        
+        # 检查是否超过阈值
+        alarm_status = {
+            'temperature': {
+                'value': temp,
+                'threshold': temp_th,
+                'alarm': temp > temp_th
+            },
+            'humidity': {
+                'value': hum,
+                'threshold': hum_th,
+                'alarm': hum > hum_th
+            }
+        }
+        
+        return jsonify(alarm_status)
+    
+    return jsonify({'error': '无法获取数据'})
+
 if __name__ == "__main__":
+    # 启动后台监控
+    monitor_thread = Thread(target=background_monitor, daemon=True)
+    monitor_thread.start() 
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
