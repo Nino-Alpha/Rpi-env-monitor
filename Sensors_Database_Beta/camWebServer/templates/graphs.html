@@ -18,8 +18,8 @@
     <p>样本折线图</p>
     <!--显示统计时间段-->
     <h3>当前时段：{{ selected_date2 }} {{ start_time }} ~ {{ end_time }}</h3>
-    <img src="{{ plot_url_temp }}" alt="温度图" width="49%">
-    <img src="{{ plot_url_hum }}" alt="湿度图" width="49%">
+    <!-- <img src="{{ plot_url_temp }}" alt="温度图" width="49%">
+    <img src="{{ plot_url_hum }}" alt="湿度图" width="49%"> -->
     <hr>
 	<!-- <div>{{ plot_div_temp | safe }}</div> -->
     <!-- 显示温度图像 -->
@@ -37,6 +37,15 @@
     {{ plot_div_combined|safe }}
     </div>
     <hr>
+    <!-- 显示温湿度一阶差分图表 -->
+    <div class="chart-container">
+        {{ plot_div_temp_diff|safe }}
+        </div>
+        <hr>
+    <div class="chart-container">
+        {{ plot_div_hum_diff|safe }}
+        </div>
+        <hr>
     <!--重新选择统计时间段-->
     <h3> 选择统计时段 </h3>
 		<form method="POST" action="/select_graph" onsubmit="return validateTime()">		
