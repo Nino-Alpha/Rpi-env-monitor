@@ -136,6 +136,7 @@ def send_email(subject, content):
         with smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
             server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
             server.sendmail(EMAIL_CONFIG['sender_email'], [EMAIL_CONFIG['receiver_email']], msg.as_string())
+            server.quit()  # 添加这行代码来正确关闭连接
     # 更新上次发送时间
         if subject == '温度报警':
             last_email_sent['temperature'] = current_time
