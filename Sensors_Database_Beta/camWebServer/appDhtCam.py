@@ -315,13 +315,22 @@ def select_graph():
     plot_url_temp = f"data:image/png;base64,{base64.b64encode(output_temp.getvalue()).decode('utf-8')}"
 # 使用Plotly绘制温度图像
     trace_temp = go.Scatter(x=times, y=temps, mode='lines', name='温度 (°C)')
+
     layout_temp = go.Layout(
         title='温度随时间变化趋势',
         xaxis=dict(title='时间'),
         yaxis=dict(title='温度 (°C)', range=[20, 40]),  # 固定纵轴范围
         hovermode='x unified'
     )
-    fig_temp = go.Figure(data=[trace_temp], layout=layout_temp)
+    threshold_temp = go.Scatter(
+    x=[times[0], times[-1]], 
+    y=[current_th[3], current_th[3]], 
+    mode='lines', 
+    name='温度阈值', 
+    line=dict(color='red', dash='dash')
+)
+
+    fig_temp = go.Figure(data=[trace_temp, threshold_temp], layout=layout_temp)
     plot_div_temp = pyo.plot(fig_temp, output_type='div', include_plotlyjs=False)
         # 绘制湿度图像
     fig_hum = Figure() 
@@ -345,7 +354,14 @@ def select_graph():
         yaxis=dict(title='湿度 (%)', range=[0, 100]),  # 固定纵轴范围
         hovermode='x unified'
     )
-    fig_hum = go.Figure(data=[trace_hum], layout=layout_hum)
+    threshold_hum = go.Scatter(
+    x=[times[0], times[-1]], 
+    y=[current_th[4], current_th[4]], 
+    mode='lines', 
+    name='湿度阈值', 
+    line=dict(color='red', dash='dash')
+)
+    fig_hum = go.Figure(data=[trace_hum, threshold_hum], layout=layout_hum)
     plot_div_hum = pyo.plot(fig_hum, output_type='div', include_plotlyjs=False)
     # 使用Plotly绘制温湿度图像
     layout = go.Layout(
