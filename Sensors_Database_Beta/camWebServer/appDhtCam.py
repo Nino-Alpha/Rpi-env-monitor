@@ -314,15 +314,15 @@ def select_graph():
     canvas_temp.print_png(output_temp)
     plot_url_temp = f"data:image/png;base64,{base64.b64encode(output_temp.getvalue()).decode('utf-8')}"
 # 使用Plotly绘制温度图像
-    trace = go.Scatter(x=times, y=temps, mode='lines', name='温度 (°C)')
-    layout = go.Layout(
+    trace_temp = go.Scatter(x=times, y=temps, mode='lines', name='温度 (°C)')
+    layout_temp = go.Layout(
         title='温度随时间变化趋势',
         xaxis=dict(title='时间'),
         yaxis=dict(title='温度 (°C)', range=[20, 40]),  # 固定纵轴范围
         hovermode='x unified'
     )
-    fig = go.Figure(data=[trace], layout=layout)
-    plot_div = pyo.plot(fig, output_type='div', include_plotlyjs=False)
+    fig_temp = go.Figure(data=[trace_temp], layout=layout_temp)
+    plot_div_temp = pyo.plot(fig_temp, output_type='div', include_plotlyjs=False)
         # 绘制湿度图像
     fig_hum = Figure() 
     axis_hum = fig_hum.add_subplot(1, 1, 1)
@@ -337,6 +337,16 @@ def select_graph():
     output_hum = io.BytesIO()
     canvas_hum.print_png(output_hum)
     plot_url_hum = f"data:image/png;base64,{base64.b64encode(output_hum.getvalue()).decode('utf-8')}"
+    # 使用Plotly绘制湿度图像
+    trace_hum = go.Scatter(x=times, y=hums, mode='lines', name='湿度 (%)')
+    layout_hum = go.Layout(
+        title='湿度随时间变化趋势',
+        xaxis=dict(title='时间'),
+        yaxis=dict(title='湿度 (%)', range=[0, 100]),  # 固定纵轴范围
+        hovermode='x unified'
+    )
+    fig_hum = go.Figure(data=[trace_hum], layout=layout_hum)
+    plot_div_hum = pyo.plot(fig_hum, output_type='div', include_plotlyjs=False)
     templateData = {
         'times': times,
         'temps': temps,
@@ -345,8 +355,9 @@ def select_graph():
         'end_time': end_time,
         'selected_date2': selected_date2,
         'plot_url_temp': plot_url_temp,  # 温度图像URL
-        'plot_div': plot_div, # Plotly图像的HTML代码
-        'plot_url_hum': plot_url_hum    # 湿度图像URL
+        'plot_div_temp': plot_div_temp, # Plotly温度图像的HTML代码
+        'plot_url_hum': plot_url_hum ,   # 湿度图像URL
+        'plot_div_hum': plot_div_hum  # Plotly湿度图像的HTML代码
     }
     return render_template('graphs.html', **templateData)
 #中转路由
