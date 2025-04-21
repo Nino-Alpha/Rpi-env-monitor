@@ -20,7 +20,7 @@
 		}
 
     </style>
-	<meta http-equiv="refresh" content="60">
+	<!-- <meta http-equiv="refresh" content="60"> -->
 </head>
 
 <body>
@@ -98,27 +98,6 @@
 	    <button type="submit">查询</button>
 	</form>
 	
-	<!-- 报警历史结果显示 -->
-	{% if alarm_data %}
-	<h3>报警历史记录</h3>
-	<table border="1" style="margin:auto;">
-	    <tr>
-	        <th>时间</th>
-	        <th>报警类型</th>
-	        <th>当前值</th>
-	        <th>阈值</th>
-	    </tr>
-	    {% for row in alarm_data %}
-	    <tr>
-	        <td>{{ row[0] }}</td>
-	        <td>{{ '温度' if row[1] == 'temperature' else '湿度' }}</td>
-	        <td>{{ row[2] }}</td>
-	        <td>{{ row[3] }}</td>
-	    </tr>
-	    {% endfor %}
-	</table>
-	{% endif %}
-		
 		<hr>
 		<p>样本折线图</p>
 		<!--选择统计时间段-->
@@ -169,33 +148,35 @@
 <script>
 	// 实时报警检测
 	function checkAlerts() {
-    fetch('/check_alarm')
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                console.error(data.error);
-                return;
-            }
-
-            // 温度报警处理
-            const tempAlert = document.getElementById('temp_alert');
-            if (data.temperature.alarm) {
-                tempAlert.innerHTML = `⚠️ 温度报警！当前：${data.temperature.value}℃ (阈值：${data.temperature.threshold}℃)`;
-                tempAlert.style.color = 'red';
-            } else {
-                tempAlert.innerHTML = '';
-            }
-
-            // 湿度报警处理
-            const humAlert = document.getElementById('hum_alert');
-            if (data.humidity.alarm) {
-                humAlert.innerHTML = `⚠️ 湿度报警！当前：${data.humidity.value}% (阈值：${data.humidity.threshold}%)`;
-                humAlert.style.color = 'red';
-            } else {
-                humAlert.innerHTML = '';
-            }
-        })
-        .catch(error => console.error('Error:', error));
+		const current_temp = {{ temp }};
+		const current_hum = {{ hum }};
+		const [temp_th, hum_th] = [{{ current_th[3] }}, {{ current_th[4] }}];
+		
+		// 温度报警
+		if(current_temp > temp_th) {
+			document.getElementById('temp_alert').innerHTML = 
+				'⚠️ 温度超过阈值！当前：' + current_temp + '℃';
+			alert("警告，温度已超过阈值！");
+		} else if(current_temp >= temp_th * 0.9) {
+			document.getElementById('temp_alert').innerHTML = 
+				'⚠️ 敏感温度！当前：' + current_temp + '℃';
+		} else {
+			document.getElementById('temp_alert').innerHTML = '';
+		}
+		
+		// 湿度报警（逻辑同上）
+		if(current_hum > hum_th) {
+			document.getElementById('hum_alert').innerHTML = 
+				'⚠️ 湿度超过阈值！当前：' + current_hum + '%';
+			alert("警告，湿度已超过阈值！");
+		} else if(current_hum >= hum_th * 0.9) {
+			document.getElementById('hum_alert').innerHTML = 
+				'⚠️ 敏感湿度！当前：' + current_hum + '%';
+		} else {
+			document.getElementById('hum_alert').innerHTML = '';
+		}
+		// ...（类似温度的处理）
+	
 }
 	
 	// 表单验证
@@ -232,8 +213,8 @@
 	    return validateTimeRange(startTime, endTime, '开始时间不能超过结束时间，请重新选择！');
 	}
 	
-	// 每10秒检查一次报警状态
-	setInterval(checkAlerts, 10000);
+	// 每180秒检查一次报警状态
+	setInterval(checkAlerts, 180000);
 	window.onload = checkAlerts;// 页面加载时立即检查
 	</script>	
 	

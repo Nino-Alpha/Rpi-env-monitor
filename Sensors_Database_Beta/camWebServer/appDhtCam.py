@@ -30,15 +30,21 @@ app = Flask(__name__)
 app.secret_key = '8888'  
 # 邮件配置
 EMAIL_CONFIG = {
-    'smtp_server': 'smtp.example.com',  # SMTP服务器地址
-    'smtp_port': 587,  # SMTP端口
-    'sender_email': 'your_email@example.com',  # 发件邮箱
-    'sender_password': 'your_password',  # 发件邮箱密码
-    'receiver_email': 'receiver@example.com',  # 收件邮箱
+    'smtp_server': 'smtp.qq.com',  # SMTP服务器地址
+    'smtp_port': 465,  # SMTP端口
+    'sender_email': '1319716674@qq.com',  # 发件邮箱
+    'sender_password': 'qbbotthcvjrdgfbc',  # 发件邮箱密码
+    # 'use_ssl': True ,
+    'receiver_email': 'chenyv287212@gmail.com',  # 收件邮箱
     'min_interval': 300  # 最小发送间隔，单位秒（5分钟）  
 }
 # 全局变量记录上次发送时间
 last_email_sent = {
+    'temperature': 0,
+    'humidity': 0
+}
+# 全局变量记录上次报警时间
+last_alarm_recorded = {
     'temperature': 0,
     'humidity': 0
 }
@@ -127,8 +133,7 @@ def send_email(subject, content):
         msg['From'] = EMAIL_CONFIG['sender_email']
         msg['To'] = EMAIL_CONFIG['receiver_email']
 
-        with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
-            server.starttls()
+        with smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
             server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
             server.sendmail(EMAIL_CONFIG['sender_email'], [EMAIL_CONFIG['receiver_email']], msg.as_string())
     # 更新上次发送时间
@@ -141,26 +146,32 @@ def send_email(subject, content):
 
 # 后台监控任务
 def background_monitor():
-    while True:
-        try:
-            # 获取最新数据
-            temp, hum = getDHTdata()
-            current_th = get_current_threshold()
+    with app.app_context():  # 添加应用上下文
+        while True:
+            try:
+                # 获取最新数据
+                _, temp, hum = getLastData()
+                current_th = get_current_threshold()
 
-            if temp is not None and hum is not None and current_th:
-                # 检查温度
-                if temp > current_th[3]:
-                    send_email('温度报警', f'当前温度 {temp}℃ 超过阈值 {current_th[3]}℃')
-                    log_alarm('temperature', temp, current_th[3])
-                # 检查湿度
-                if hum > current_th[4]:
-                    send_email('湿度报警', f'当前湿度 {hum}% 超过阈值 {current_th[4]}%')
-                    log_alarm('humidity', hum, current_th[4])
-            # 每60秒检查一次
-            time.sleep(60)
-        except Exception as e:
-            print(f"后台监控出错: {e}")
-            time.sleep(60)
+                if temp is not None and hum is not None and current_th:
+                    # 检查温度
+                    current_time = time.time()
+                    if temp > current_th[3]:
+                        if current_time - last_alarm_recorded['temperature'] >= 60:  # 确保每分钟只记录一次
+                            send_email('温度报警', f'当前温度 {temp}℃ 超过阈值 {current_th[3]}℃')
+                            log_alarm('temperature', temp, current_th[3])
+                            last_alarm_recorded['temperature'] = current_time
+                    # 检查湿度
+                    if hum > current_th[4]:
+                        if current_time - last_alarm_recorded['humidity'] >= 60:  # 确保每分钟只记录一次
+                            send_email('湿度报警', f'当前湿度 {hum}% 超过阈值 {current_th[4]}%')
+                            log_alarm('humidity', hum, current_th[4])
+                            last_alarm_recorded['humidity'] = current_time
+                # 每180秒检查一次
+                time.sleep(180)
+            except Exception as e:
+                print(f"后台监控出错: {e}")
+                time.sleep(60)
 # 新增报警记录函数
 def log_alarm(alarm_type, current_value, threshold):
     db = get_db()
@@ -371,46 +382,13 @@ def getFirstData():
         return time, temp, hum
     return None, None, None
 
-@app.route('/check_alarm')
-def check_alarm():
-    # 获取最新温湿度数据
-    db = get_db()
-    curs = db.cursor()
-    curs.execute("SELECT * FROM DHT_data ORDER BY timestamp DESC LIMIT 1")
-    latest_data = curs.fetchone()
-    
-    # 获取当前时段阈值
-    current_th = get_current_threshold()
-    
-    if latest_data and current_th:
-        temp = latest_data[1]
-        hum = latest_data[2]
-        temp_th = current_th[3]
-        hum_th = current_th[4]
-        
-        # 检查是否超过阈值
-        alarm_status = {
-            'temperature': {
-                'value': temp,
-                'threshold': temp_th,
-                'alarm': temp > temp_th
-            },
-            'humidity': {
-                'value': hum,
-                'threshold': hum_th,
-                'alarm': hum > hum_th
-            }
-        }
-        
-        return jsonify(alarm_status)
-    
-    return jsonify({'error': '无法获取数据'})
 # 报警历史查询路由
 @app.route('/query_alarm_history', methods=['POST'])
 def query_alarm_history():
-    selected_date = request.form['date']
+    selected_date3 = request.form['date']
     start_time = request.form['start_time']
     end_time = request.form['end_time']
+    session['selected_date3'] = selected_date3
     
     db = get_db()
     curs = db.cursor()
@@ -421,16 +399,16 @@ def query_alarm_history():
         AND TIME(timestamp) BETWEEN ? AND ?
         ORDER BY timestamp DESC
     """
-    curs.execute(query, (selected_date, start_time, end_time))
+    curs.execute(query, (selected_date3, start_time, end_time))
     rows = curs.fetchall()
 
     templateData = {
-        'alarm_data': rows,
-        'selected_date': selected_date,
-        'start_time': start_time,
-        'end_time': end_time
+        'alarm_data': rows
+        # 'selected_date': selected_date,
+        # 'start_time': start_time,
+        # 'end_time': end_time
     }
-    return render_template('index.html', **templateData)
+    return render_template('table_alarm.html', **templateData)
 
 if __name__ == "__main__":
     # 启动后台监控

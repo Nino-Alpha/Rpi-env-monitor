@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>报警记录查询表</title>
+    <link rel="stylesheet" href='../static/style.css'/>
+    <style>
+		body {
+			text-align: center;
+		}
+            
+        table {
+            border-collapse: collapse;
+            margin: auto;
+            width: 80%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #7d7777;
+        }
+        tr:hover {
+            background-color: #585353;
+        }
+    </style>
+</head>
+<body >
+    <!-- 报警历史结果显示 -->
+	{% if alarm_data %}
+	<h1>报警历史记录</h1>
+	<!-- <table border="1" style="margin:auto;"> -->
+    <table>    
+	    <tr>
+	        <th>时间</th>
+	        <th>报警类型</th>
+	        <th>当前值</th>
+	        <th>阈值</th>
+	    </tr>
+	    {% for row in alarm_data %}
+	    <tr>
+	        <td>{{ row[0] }}</td>
+	        <td>{{ '温度' if row[1] == 'temperature' else '湿度' }}</td>
+	        <td>{{ row[2] }}</td>
+	        <td>{{ row[3] }}</td>
+	    </tr>
+	    {% endfor %}
+	</table>
+	{% endif %}
+        <hr>
+
+        <h3> 返回主页面 ==> <a href="/"class="button">RETURN</a></h3>	
+        <hr>
+        <p> @2025 Developed by Ningchy , BUPT 2021210585 </p>
+</body>
+</html>
