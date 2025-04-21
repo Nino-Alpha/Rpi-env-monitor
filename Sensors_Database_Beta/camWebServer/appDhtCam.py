@@ -101,6 +101,12 @@ def logFreq(sampleFreq):
     db.commit()
     return None
 
+def getThresholds():
+    db = get_db()
+    curs = db.cursor()
+    curs.execute("SELECT * FROM thresholds ORDER BY period")
+    return curs.fetchall()
+
 def get_current_threshold():
     current_time = datetime.now().strftime("%H:%M")
     db = get_db()
@@ -203,12 +209,6 @@ def set_thresholds():
         return f"<script>alert('设置错误: {str(e)}');window.history.back();</script>"
     
 
-def getThresholds():
-    db = get_db()
-    curs = db.cursor()
-    curs.execute("SELECT * FROM thresholds ORDER BY period")
-    return curs.fetchall()
-
 # 主页路由
 @app.route("/")
 def index():
@@ -281,7 +281,8 @@ def select_graph():
     end_time = request.form['end_time']
 
     session['selected_date2'] = selected_date2
-    
+    # 获取当前阈值
+    thresholds = getThresholds()
     query = """
         SELECT timestamp, temp, hum
         FROM DHT_data
@@ -322,15 +323,19 @@ def select_graph():
         yaxis=dict(title='温度 (°C)', range=[20, 40]),  # 固定纵轴范围
         hovermode='x unified'
     )
-    threshold_temp = go.Scatter(
-    x=[times[0], times[-1]], 
-    y=[current_th[3], current_th[3]], 
-    mode='lines', 
-    name='温度阈值', 
-    line=dict(color='red', dash='dash')
-)
-
-    fig_temp = go.Figure(data=[trace_temp, threshold_temp], layout=layout_temp)
+     # 添加温度阈值线
+    temp_thresholds = []
+    for th in thresholds:
+        # 根据时段设置不同颜色
+        color = 'red' if th[0] == 'A' else 'green' if th[0] == 'B' else 'blue'
+        temp_thresholds.append(go.Scatter(
+            x=[times[0], times[-1]], 
+            y=[th[3], th[3]], 
+            mode='lines', 
+            name=f'{th[0]}时段温度阈值', 
+            line=dict(color=color, dash='dash')
+        ))
+    fig_temp = go.Figure(data=[trace_temp] + temp_thresholds, layout=layout_temp)
     plot_div_temp = pyo.plot(fig_temp, output_type='div', include_plotlyjs=False)
         # 绘制湿度图像
     fig_hum = Figure() 
@@ -354,14 +359,19 @@ def select_graph():
         yaxis=dict(title='湿度 (%)', range=[0, 100]),  # 固定纵轴范围
         hovermode='x unified'
     )
-    threshold_hum = go.Scatter(
-    x=[times[0], times[-1]], 
-    y=[current_th[4], current_th[4]], 
-    mode='lines', 
-    name='湿度阈值', 
-    line=dict(color='red', dash='dash')
-)
-    fig_hum = go.Figure(data=[trace_hum, threshold_hum], layout=layout_hum)
+    # 添加湿度阈值线
+    hum_thresholds = []
+    for th in thresholds:
+        # 根据时段设置不同颜色
+        color = 'red' if th[0] == 'A' else 'green' if th[0] == 'B' else 'blue'
+        hum_thresholds.append(go.Scatter(
+            x=[times[0], times[-1]], 
+            y=[th[4], th[4]], 
+            mode='lines', 
+            name=f'{th[0]}时段湿度阈值', 
+            line=dict(color=color, dash='dash')
+        ))
+    fig_hum = go.Figure(data=[trace_hum] + hum_thresholds, layout=layout_hum)
     plot_div_hum = pyo.plot(fig_hum, output_type='div', include_plotlyjs=False)
     # 使用Plotly绘制温湿度图像
     layout = go.Layout(
