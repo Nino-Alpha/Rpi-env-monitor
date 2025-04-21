@@ -104,12 +104,12 @@
 		<h3> 选择统计时段 </h3>
 		<form method="POST" action="/select_graph" onsubmit="return validateTime()">
 			<!-- 导入宏 -->
-			{% from "_macros.html" import time_selectors %}
+			{% from "_macros.html" import time_selectors2 %}
 
 			<!-- 调用宏 -->
-			{{ time_selectors(selected_date=selected_date2) }}
+			{{ time_selectors2(selected_date1=selected_date2,selected_date2=selected_date2_1) }}
 			
-			<button type="submit">统计结果</button>
+			<button type="submit">生成图表</button>
 			
 		</form>
 		<hr>

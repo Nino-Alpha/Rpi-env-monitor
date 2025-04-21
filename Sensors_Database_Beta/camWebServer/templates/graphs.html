@@ -46,20 +46,13 @@
         {{ plot_div_hum_diff|safe }}
         </div>
         <hr>
-    <!--重新选择统计时间段-->
-    <h3> 选择统计时段 </h3>
-		<form method="POST" action="/select_graph" onsubmit="return validateTime()">		
-	
-			<!-- 导入宏 -->
-			{% from "_macros.html" import time_selectors %}
-
-			<!-- 调用宏 -->
-			{{ time_selectors(selected_date=selected_date2) }}
-			
-			<button type="submit">统计</button>
-			
-		</form>
-		<hr>
+        <!-- 在页面中显示对比图 -->
+    <div class="chart-container">
+        {{ plot_div_temp_compare|safe }}
+    </div>
+    <div class="chart-container">
+        {{ plot_div_hum_compare|safe }}
+    </div>
     <!--下载统计图-->
     <hr>
         <h3> 返回主页面 ==> <a href="/"class="button">RETURN</a></h3>	

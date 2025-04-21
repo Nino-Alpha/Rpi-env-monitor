@@ -218,6 +218,7 @@ def index():
     thresholds = getThresholds() 
     selected_date1 = session.get('selected_date1', None)
     selected_date2 = session.get('selected_date2', None)
+    selected_date2_1 = session.get('selected_date2_1', None) #数据统计图 第二日期
     selected_date3 = session.get('selected_date3', None)
 
     templateData = {
@@ -229,6 +230,7 @@ def index():
         'thresholds': thresholds,
         'selected_date1': selected_date1,
         'selected_date2': selected_date2,
+        'selected_date2_1': selected_date2_1,
         'selected_date3': selected_date3
     }
     return render_template('index.html', **templateData)
@@ -273,14 +275,16 @@ def query_history():
     }
     return render_template('table.html', **templateData)
 
-#数据库统计路由
+#数据库统计图路由
 @app.route('/select_graph', methods=['POST'])
 def select_graph():
     selected_date2 = request.form['date']
+    selected_date2_1 = request.form['date2']
     start_time = request.form['start_time']
     end_time = request.form['end_time']
 
     session['selected_date2'] = selected_date2
+    session['selected_date2_1'] = selected_date2_1
     # 获取当前阈值
     thresholds = getThresholds()
     query = """
@@ -289,31 +293,35 @@ def select_graph():
         WHERE DATE(timestamp) = ?
         AND TIME(timestamp) BETWEEN ? AND ?
     """
+    # 查询第一天的数据
     db = get_db()
     curs = db.cursor()
     curs.execute(query, (selected_date2, start_time, end_time))
     rows = curs.fetchall()
-    
+    # 查询第二天的数据
+    curs.execute(query, (selected_date2_1, start_time, end_time))
+    rows2 = curs.fetchall()
     # 处理数据以生成图表
-    times, temps, hums = [], [], []
+    # 处理第一天的数据
+    times, times1, temps, hums = [], [], [], []
     for row in rows:
+
         times.append(row[0])
         temps.append(row[1])
         hums.append(row[2])
-# # 绘制温度图像matplotlib
-#     fig_temp = Figure()
-#     axis_temp = fig_temp.add_subplot(1, 1, 1)
-#     axis_temp.set_title("Temperature [°C]")
-#     axis_temp.set_xlabel("Samples")
-#     axis_temp.grid(True)
-#     xs = range(len(temps))
-#     axis_temp.plot(xs, temps)    
-#     axis_temp.set_ylim(10, 45)  # 设置纵轴范围为10到45
-#         # 将温度图像转换为PNG格式
-#     canvas_temp = FigureCanvas(fig_temp)
-#     output_temp = io.BytesIO()
-#     canvas_temp.print_png(output_temp)
-#     plot_url_temp = f"data:image/png;base64,{base64.b64encode(output_temp.getvalue()).decode('utf-8')}"
+        # # 只保留时间部分time1用于
+        # time_str = row[0].split(' ')[1]  # 提取时间部分
+        # times1.append(time_str)
+    # 处理第二天的数据
+    times2, temps2, hums2 = [], [], []
+    for row in rows2:
+         # 只保留时间部分
+        # time_str = row[0].split(' ')[1]  # 提取时间部分
+        # times2.append(time_str)
+        times2.append(row[0])
+        temps2.append(row[1])
+        hums2.append(row[2])
+    
 # 使用Plotly绘制温度图像
     trace_temp = go.Scatter(x=times, y=temps, mode='lines', name='温度 (°C)')
 
@@ -337,20 +345,7 @@ def select_graph():
         ))
     fig_temp = go.Figure(data=[trace_temp] + temp_thresholds, layout=layout_temp)
     plot_div_temp = pyo.plot(fig_temp, output_type='div', include_plotlyjs=False)
-    #     # 绘制湿度图像matplotlib
-    # fig_hum = Figure() 
-    # axis_hum = fig_hum.add_subplot(1, 1, 1)
-    # axis_hum.set_title("Humidity [%]")
-    # axis_hum.set_xlabel("Samples")
-    # axis_hum.grid(True)
-    # xs = range(len(hums))
-    # axis_hum.plot(xs, hums)
-    # axis_hum.set_ylim(10, 80)
-    #     # 将湿度图像转换为PNG格式
-    # canvas_hum = FigureCanvas(fig_hum)
-    # output_hum = io.BytesIO()
-    # canvas_hum.print_png(output_hum)
-    # plot_url_hum = f"data:image/png;base64,{base64.b64encode(output_hum.getvalue()).decode('utf-8')}"
+ 
     # 使用Plotly绘制湿度图像
     trace_hum = go.Scatter(x=times, y=hums, mode='lines', name='湿度 (%)')
     layout_hum = go.Layout(
@@ -406,6 +401,57 @@ def select_graph():
     )
     fig_hum_diff = go.Figure(data=[trace_hum_diff], layout=layout_hum_diff)
     plot_div_hum_diff = pyo.plot(fig_hum_diff, output_type='div', include_plotlyjs=False)
+     # 使用Plotly绘制温度对比图像
+    trace_temp = go.Scatter(
+    x=list(range(len(temps))),  # x轴数据（索引）
+    y=temps,              # y轴数据（温度值）
+    mode='lines',
+    name=f'{selected_date2} 温度 (°C)',
+    hovertemplate='时间: %{text|%H:%M}<br>温度: %{y}°C<extra></extra>',  # 自定义悬停模板
+    text=times            # 将时间数据绑定到text属性，供hovertemplate调用
+)
+    trace_temp2 = go.Scatter(x=list(range(len(temps2))),
+    y=temps2,
+    mode='lines', 
+    name=f'{selected_date2_1} 温度 (°C)',
+    hovertemplate='时间: %{text|%H:%M}<br>湿度: %{y}°C<extra></extra>',  # 自定义悬停模板
+    text=times2            # 将时间数据绑定到text属性，供hovertemplate调用
+    )
+    layout_temp_compare = go.Layout(
+        title='温度对比图',
+        xaxis=dict(title='样本'),
+        yaxis=dict(title='温度 (°C)'),
+        hovermode='x unified'
+    )
+    fig_temp_compare = go.Figure(data=[trace_temp, trace_temp2], layout=layout_temp_compare)
+    plot_div_temp_compare = pyo.plot(fig_temp_compare, output_type='div', include_plotlyjs=False)
+
+    # 使用Plotly绘制湿度对比图像
+    trace_hum = go.Scatter(
+    x=list(range(len(hums))),  # x轴数据（索引）
+    y=hums,              # y轴数据（湿度值）
+    mode='lines',
+    name=f'{selected_date2} 湿度 (%)',
+    hovertemplate='时间: %{text|%H:%M}<br>湿度: %{y}%<extra></extra>',  # 自定义悬停模板
+    text=times            # 将时间数据绑定到text属性，供hovertemplate调用
+)
+    trace_hum2 = go.Scatter(
+    x=list(range(len(hums2))),  # x轴数据（索引）
+    y=hums2, 
+    mode='lines', 
+    name=f'{selected_date2_1} 湿度 (%)',
+    hovertemplate='时间: %{text|%H:%M}<br>湿度: %{y}%<extra></extra>',  # 自定义悬停模板
+    text=times2            # 将时间数据绑定到text属性，供hovertemplate调用
+)
+    layout_hum_compare = go.Layout(
+        title='湿度对比图',
+        xaxis=dict(title='样本'),
+        yaxis=dict(title='湿度 (%)'),
+        hovermode='x unified'
+    )
+    fig_hum_compare = go.Figure(data=[trace_hum, trace_hum2], layout=layout_hum_compare)
+    plot_div_hum_compare = pyo.plot(fig_hum_compare, output_type='div', include_plotlyjs=False)
+    
     templateData = {
         'times': times,
         'temps': temps,
@@ -419,7 +465,9 @@ def select_graph():
         'plot_div_hum': plot_div_hum,  # Plotly湿度图像的HTML代码
         'plot_div_combined': plot_div_combined , # 温湿度组合图表
         'plot_div_temp_diff': plot_div_temp_diff,  # 温度差分图像
-        'plot_div_hum_diff': plot_div_hum_diff  # 湿度差分图像
+        'plot_div_hum_diff': plot_div_hum_diff,  # 湿度差分图像
+        'plot_div_temp_compare': plot_div_temp_compare,  # 温度对比图
+        'plot_div_hum_compare': plot_div_hum_compare  # 湿度对比图
     }
     return render_template('graphs.html', **templateData)
 #中转路由
