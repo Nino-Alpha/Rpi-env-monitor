@@ -347,6 +347,16 @@ def select_graph():
     )
     fig_hum = go.Figure(data=[trace_hum], layout=layout_hum)
     plot_div_hum = pyo.plot(fig_hum, output_type='div', include_plotlyjs=False)
+    # 使用Plotly绘制温湿度图像
+    layout = go.Layout(
+    title='温湿度随时间变化趋势',
+    xaxis=dict(title='时间'),
+    yaxis=dict(title='数值'),
+    hovermode='x unified'
+    )
+    fig_combined = go.Figure(data=[trace_temp, trace_hum], layout=layout)
+    plot_div_combined = pyo.plot(fig_combined, output_type='div', include_plotlyjs=False)
+
     templateData = {
         'times': times,
         'temps': temps,
@@ -357,7 +367,8 @@ def select_graph():
         'plot_url_temp': plot_url_temp,  # 温度图像URL
         'plot_div_temp': plot_div_temp, # Plotly温度图像的HTML代码
         'plot_url_hum': plot_url_hum ,   # 湿度图像URL
-        'plot_div_hum': plot_div_hum  # Plotly湿度图像的HTML代码
+        'plot_div_hum': plot_div_hum,  # Plotly湿度图像的HTML代码
+        'plot_div_combined': plot_div_combined  # 温湿度组合图表
     }
     return render_template('graphs.html', **templateData)
 #中转路由
