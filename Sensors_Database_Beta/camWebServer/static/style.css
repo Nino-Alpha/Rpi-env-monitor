@@ -142,3 +142,17 @@ body{
 .stats-detail button:hover {
   background-color: #696666;
 }
+/*子区间柱形图样式*/
+#hourlyCharts {
+  width: 100%;
+  margin: 20px 0;
+}
+
+#hourlyCharts .plot-container {
+  margin-bottom: 30px;
+}
+
+#hourlyTempChart, #hourlyHumChart {
+  display: block;
+  margin: 20px 0;
+}

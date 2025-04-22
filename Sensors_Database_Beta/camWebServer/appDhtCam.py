@@ -206,7 +206,7 @@ def calculate_statistics(selected_date, start_time, end_time):
     
     temps = data[:, 0]
     hums = data[:, 1]
-    
+    hourly_stats = calculate_hourly_statistics(selected_date, start_time, end_time)
     # 基础统计
     stats = {
         'temp_avg': np.mean(temps),
@@ -217,7 +217,10 @@ def calculate_statistics(selected_date, start_time, end_time):
         'hum_min': np.min(hums),
         'hum_max': np.max(hums),
         'hum_median': np.median(hums),
-        'correlation': np.corrcoef(temps, hums)[0, 1]
+        'correlation': np.corrcoef(temps, hums)[0, 1],
+        'hourly_stats': hourly_stats
+        # 'hourly_charts': generate_hourly_charts(hourly_stats) # 每小时统计图表
+        
     }
     
     # 温度区间百分比
@@ -229,7 +232,7 @@ def calculate_statistics(selected_date, start_time, end_time):
     }
     
     # 湿度区间百分比
-    hum_bins = [10, 20, 30, 40, 50, 60, 70, 80, 90]
+    hum_bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
     hum_counts, _ = np.histogram(hums, bins=hum_bins)
     stats['hum_bins'] = {
         f'{hum_bins[i]}-{hum_bins[i+1]}': count/len(hums)*100 
@@ -237,7 +240,7 @@ def calculate_statistics(selected_date, start_time, end_time):
     }
     
     return stats
-
+    # 统计结果保存到数据库
 def save_stats_result(start_date, end_date, start_time, end_time, stats):
     db = get_db()
     curs = db.cursor()
@@ -257,6 +260,156 @@ def save_stats_result(start_date, end_date, start_time, end_time, stats):
         stats['correlation'], temp_bins, hum_bins
     ))
     db.commit()
+
+ # 计算每小时的统计数据
+def calculate_hourly_statistics(selected_date, start_time, end_time):
+    db = get_db()
+    curs = db.cursor()
+    
+    # 解析开始和结束时间
+    start_hour = int(start_time.split(':')[0])
+    end_hour = int(end_time.split(':')[0])
+    
+    hourly_stats = []
+    
+    for hour in range(start_hour, end_hour):
+        # 构建时间范围
+        hour_start = f"{hour:02d}:00"
+        hour_end = f"{hour+1:02d}:00"
+        
+        # 查询该小时的数据
+        query = """
+            SELECT temp, hum FROM DHT_data
+            WHERE DATE(timestamp) = ? 
+            AND TIME(timestamp) >= ? AND TIME(timestamp) < ?
+        """
+        curs.execute(query, (selected_date, hour_start, hour_end))
+        data = np.array(curs.fetchall())
+        
+        if len(data) == 0:
+            hourly_stats.append({
+                'time_range': f"{hour_start}-{hour_end}",
+                'temp_avg': None,
+                'temp_min': None,
+                'temp_max': None,
+                'temp_median': None,
+                'hum_avg': None,
+                'hum_min': None,
+                'hum_max': None,
+                'hum_median': None
+            })
+            continue
+            
+        temps = data[:, 0]
+        hums = data[:, 1]
+        
+        hourly_stats.append({
+            'time_range': f"{hour_start}-{hour_end}",
+            'temp_avg': np.mean(temps),
+            'temp_min': np.min(temps),
+            'temp_max': np.max(temps),
+            'temp_median': np.median(temps),
+            'hum_avg': np.mean(hums),
+            'hum_min': np.min(hums),
+            'hum_max': np.max(hums),
+            'hum_median': np.median(hums)
+        })
+    
+    return hourly_stats
+ 
+#  # 生成每小时统计图表
+# def generate_hourly_charts(hourly_stats):
+#     if not hourly_stats:
+#         print("No hourly stats data")  # 调试输出
+#         return None
+#     # print("Generating charts for:", hourly_stats)  # 调试输出
+#     # print("Generated temp chart HTML length:", len(temp_div))  # 调试输出
+#     # print("Generated hum chart HTML length:", len(hum_div))  # 调试输出
+
+#     time_ranges = [item['time_range'] for item in hourly_stats]
+    
+#     # 温度图表
+#     temp_traces = [
+#         go.Bar(
+#             x=time_ranges,
+#             y=[item['temp_avg'] for item in hourly_stats],
+#             name='平均温度',
+#             marker=dict(color='rgba(255, 100, 100, 0.7)')
+#         ),
+#         go.Bar(
+#             x=time_ranges,
+#             y=[item['temp_min'] for item in hourly_stats],
+#             name='最低温度',
+#             marker=dict(color='rgba(100, 100, 255, 0.7)')
+#         ),
+#         go.Bar(
+#             x=time_ranges,
+#             y=[item['temp_max'] for item in hourly_stats],
+#             name='最高温度',
+#             marker=dict(color='rgba(255, 200, 50, 0.7)')
+#         ),
+#         go.Bar(
+#             x=time_ranges,
+#             y=[item['temp_median'] for item in hourly_stats],
+#             name='中位数温度',
+#             marker=dict(color='rgba(100, 255, 100, 0.7)')
+#         )
+#     ]
+    
+#     temp_layout = go.Layout(
+#         title='每小时温度统计',
+#         xaxis=dict(title='时间区间'),
+#         yaxis=dict(title='温度 (°C)'),
+#         barmode='group'
+#     )
+    
+#     temp_fig = go.Figure(data=temp_traces, layout=temp_layout)
+#     temp_div = pyo.plot(temp_fig, output_type='div', include_plotlyjs=False)
+
+#     # print("Generated temp chart HTML length:", len(temp_div))  # 调试输出
+    
+#     # 湿度图表
+#     hum_traces = [
+#         go.Bar(
+#             x=time_ranges,
+#             y=[item['hum_avg'] for item in hourly_stats],
+#             name='平均湿度',
+#             marker=dict(color='rgba(100, 200, 255, 0.7)')
+#         ),
+#         go.Bar(
+#             x=time_ranges,
+#             y=[item['hum_min'] for item in hourly_stats],
+#             name='最低湿度',
+#             marker=dict(color='rgba(200, 100, 255, 0.7)')
+#         ),
+#         go.Bar(
+#             x=time_ranges,
+#             y=[item['hum_max'] for item in hourly_stats],
+#             name='最高湿度',
+#             marker=dict(color='rgba(255, 150, 50, 0.7)')
+#         ),
+#         go.Bar(
+#             x=time_ranges,
+#             y=[item['hum_median'] for item in hourly_stats],
+#             name='中位数湿度',
+#             marker=dict(color='rgba(150, 255, 150, 0.7)')
+#         )
+#     ]
+    
+#     hum_layout = go.Layout(
+#         title='每小时湿度统计',
+#         xaxis=dict(title='时间区间'),
+#         yaxis=dict(title='湿度 (%)'),
+#         barmode='group'
+#     )
+    
+#     hum_fig = go.Figure(data=hum_traces, layout=hum_layout)
+#     hum_div = pyo.plot(hum_fig, output_type='div', include_plotlyjs=False)
+#     # print("Generated hum chart HTML length:", len(hum_div))  # 调试输出
+#     return {
+#         'temp_chart': temp_div,
+#         'hum_chart': hum_div
+#     }
 
 # 阈值设置路由
 @app.route('/set_thresholds', methods=['POST'])
@@ -542,7 +695,7 @@ def select_graph():
         'plot_div_hum_compare': plot_div_hum_compare  # 湿度对比图
     }
     return render_template('graphs.html', **templateData)
-# ... existing code ...
+
 # 数据统计计算路由
 @app.route('/calculate_stats', methods=['POST'])
 def handle_calculate_stats():
@@ -551,10 +704,12 @@ def handle_calculate_stats():
     end_time = request.form['stats_end']
     
     stats = calculate_statistics(selected_date, start_time, end_time)
+    
     if not stats:
         return jsonify({'error': '没有找到指定时段的数据'})
     
     return jsonify(stats)
+
 # 数据统计保存路由
 @app.route('/save_stats', methods=['POST'])
 def handle_save_stats():

@@ -11,7 +11,8 @@
 		}
         
     </style>
-	<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+	<!-- <script src="https://cdn.plot.ly/plotly-latest.min.js"></script> -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>
 <body>
     <h1>统计结果</h1>
@@ -81,6 +82,22 @@
         
         <div id="statsResults" class="stats-results">
             <!-- 统计结果将在这里显示 -->
+        </div>
+        <hr>
+        <!-- 在statsResults div后添加柱形图容器 -->
+        <!-- <div id="hourlyCharts">
+            {% if hourly_charts %}
+            <div class="chart-container">
+                {{ hourly_charts.temp_chart|safe }}
+            </div>
+            <div class="chart-container">
+                {{ hourly_charts.hum_chart|safe }}
+            </div>
+            {% endif %}
+        </div> -->
+        <div id="hourlyCharts">
+            <div id="hourlyTempChart" style="width: 100%; height: 400px;"></div>
+            <div id="hourlyHumChart" style="width: 100%; height: 400px;"></div>
         </div>
     </div>
     <hr>
@@ -165,9 +182,103 @@ function calculateStats() {
         `;
         
         document.getElementById('statsResults').innerHTML = html;
+
+        if(data.hourly_stats) {
+            drawHourlyCharts(data.hourly_stats);
+        }
     });
 }
-
+function drawHourlyCharts(hourlyStats) {
+    const timeRanges = hourlyStats.map(item => item.time_range);
+    
+    // 温度图表
+    const tempData = [
+        {
+            x: timeRanges,
+            y: hourlyStats.map(item => item.temp_avg),
+            name: '平均温度',
+            type: 'bar',
+            marker: {color: 'rgba(255, 100, 100, 0.7)'}
+        },
+        // 其他温度指标...
+        {
+        x: timeRanges,
+        y: hourlyStats.map(item => item.temp_min),
+        name: '最低温度',
+        type: 'bar',
+        marker: {color: 'rgba(100, 100, 255, 0.7)'}
+    },
+    {
+        x: timeRanges,
+        y: hourlyStats.map(item => item.temp_max),
+        name: '最高温度',
+        type: 'bar',
+        marker: {color: 'rgba(255, 200, 50, 0.7)'}
+    },
+    {
+        x: timeRanges,
+        y: hourlyStats.map(item => item.temp_median),
+        name: '中位数温度',
+        type: 'bar',
+        marker: {color: 'rgba(100, 255, 100, 0.7)'}
+    }
+    ];
+        
+        const tempLayout = {
+        title: '每小时温度统计',
+        yaxis: {
+            title: '温度 (°C)',
+            range: [Math.min(...hourlyStats.map(item => item.temp_min)) - 1,  // 最小值减2作为下限
+                   Math.max(...hourlyStats.map(item => item.temp_max)) + 1], // 最大值加2作为上限
+            autorange: false  // 禁用自动调整范围
+        },
+        barmode: 'group'
+    };
+    // 湿度图表
+    const humData = [
+        {
+            x: timeRanges,
+            y: hourlyStats.map(item => item.hum_avg),
+            name: '平均湿度',
+            type: 'bar',
+            marker: {color: 'rgba(100, 200, 255, 0.7)'}
+        },
+        // 其他湿度指标...
+        {
+        x: timeRanges,
+        y: hourlyStats.map(item => item.hum_min),
+        name: '最低湿度',
+        type: 'bar',
+        marker: {color: 'rgba(200, 100, 255, 0.7)'}
+    },
+    {
+        x: timeRanges,
+        y: hourlyStats.map(item => item.hum_max),
+        name: '最高湿度',
+        type: 'bar',
+        marker: {color: 'rgba(255, 150, 50, 0.7)'}
+    },
+    {
+        x: timeRanges,
+        y: hourlyStats.map(item => item.hum_median),
+        name: '中位数湿度',
+        type: 'bar',
+        marker: {color: 'rgba(150, 255, 150, 0.7)'}
+    }
+    ]; 
+    const humLayout = {
+        title: '每小时湿度统计',
+        yaxis: {
+            title: '湿度 (%)',
+            range: [Math.min(...hourlyStats.map(item => item.hum_min)) - 2,  // 最小值减5作为下限
+                   Math.max(...hourlyStats.map(item => item.hum_max)) + 2], // 最大值加5作为上限
+            autorange: false
+        },
+        barmode: 'group'
+    };
+    Plotly.newPlot('hourlyTempChart', tempData, tempLayout);
+    Plotly.newPlot('hourlyHumChart', humData, humLayout);
+}
 function formatBins(bins) {
     let rows = '';
     for(const [range, percent] of Object.entries(bins)) {
