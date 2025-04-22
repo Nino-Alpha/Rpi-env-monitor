@@ -104,158 +104,191 @@
         <h3> 返回主页面 ==> <a href="/"class="button">RETURN</a></h3>	
         <hr>
         <p> @2025 Developed by Ningchy , BUPT 2021210585 </p>
-        <script>
-            function validateTime() {
-                // 获取开始时间和结束时间
-                const startTime = document.getElementById('start_time').value;
-                const endTime = document.getElementById('end_time').value;
+<script>
+function validateTime() {
+    // 获取开始时间和结束时间
+    const startTime = document.getElementById('start_time').value;
+    const endTime = document.getElementById('end_time').value;
+
+    // 比较时间
+    if (startTime >= endTime) {
+        alert('开始时间不能超过结束时间，请重新选择！');
+        return false; // 阻止表单提交
+    }
+    return true; // 允许表单提交
+}
+</script>
+<script>
+    // 统计计算函数
+function calculateStats() {
+    const formData = new FormData(document.getElementById('statsForm'));
+    fetch('/calculate_stats', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.error) {
+            alert(data.error);
+            return;
+        }
+        
+        // 格式化显示统计结果
+        let html = `
+            <h4>统计结果</h4>
+            <table>
+                <tr><th colspan="2">温度统计</th><th colspan="2">湿度统计</th></tr>
+                <tr>
+                    <td>平均值:</td><td>${data.temp_avg.toFixed(2)}°C</td>
+                    <td>平均值:</td><td>${data.hum_avg.toFixed(2)}%</td>
+                </tr>
+                <tr>
+                    <td>最小值:</td><td>${data.temp_min.toFixed(2)}°C</td>
+                    <td>最小值:</td><td>${data.hum_min.toFixed(2)}%</td>
+                </tr>
+                <tr>
+                    <td>最大值:</td><td>${data.temp_max.toFixed(2)}°C</td>
+                    <td>最大值:</td><td>${data.hum_max.toFixed(2)}%</td>
+                </tr>
+                <tr>
+                    <td>中位数:</td><td>${data.temp_median.toFixed(2)}°C</td>
+                    <td>中位数:</td><td>${data.hum_median.toFixed(2)}%</td>
+                </tr>
+                <tr><td colspan="4">相关系数: ${data.correlation.toFixed(4)}</td></tr>
+            </table>
             
-                // 比较时间
-                if (startTime >= endTime) {
-                    alert('开始时间不能超过结束时间，请重新选择！');
-                    return false; // 阻止表单提交
-                }
-                return true; // 允许表单提交
-            }
-            </script>
-		<script>
-             // 统计计算函数
-            function calculateStats() {
-                const formData = new FormData(document.getElementById('statsForm'));
-                fetch('/calculate_stats', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if(data.error) {
-                        alert(data.error);
-                        return;
-                    }
-                    
-                    // 格式化显示统计结果
-                    let html = `
-                        <h4>统计结果</h4>
-                        <table>
-                            <tr><th colspan="2">温度统计</th><th colspan="2">湿度统计</th></tr>
-                            <tr>
-                                <td>平均值:</td><td>${data.temp_avg.toFixed(2)}°C</td>
-                                <td>平均值:</td><td>${data.hum_avg.toFixed(2)}%</td>
-                            </tr>
-                            <tr>
-                                <td>最小值:</td><td>${data.temp_min.toFixed(2)}°C</td>
-                                <td>最小值:</td><td>${data.hum_min.toFixed(2)}%</td>
-                            </tr>
-                            <tr>
-                                <td>最大值:</td><td>${data.temp_max.toFixed(2)}°C</td>
-                                <td>最大值:</td><td>${data.hum_max.toFixed(2)}%</td>
-                            </tr>
-                            <tr>
-                                <td>中位数:</td><td>${data.temp_median.toFixed(2)}°C</td>
-                                <td>中位数:</td><td>${data.hum_median.toFixed(2)}%</td>
-                            </tr>
-                            <tr><td colspan="4">相关系数: ${data.correlation.toFixed(4)}</td></tr>
-                        </table>
-                        
-                        <h5>温度分布</h5>
-                        <table>${formatBins(data.temp_bins)}</table>
-                        
-                        <h5>湿度分布</h5>
-                        <table>${formatBins(data.hum_bins)}</table>
-                    `;
-                    
-                    document.getElementById('statsResults').innerHTML = html;
-                });
-            }
+            <h5>温度分布</h5>
+            <table>${formatBins(data.temp_bins)}</table>
             
-            function formatBins(bins) {
-                let rows = '';
-                for(const [range, percent] of Object.entries(bins)) {
-                    rows += `<tr><td>${range}</td><td>${percent.toFixed(2)}%</td></tr>`;
-                }
-                return rows;
-            }
-            
-            function saveStats() {
-                const formData = new FormData(document.getElementById('statsForm'));
-                fetch('/save_stats', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if(data.success) {
-                        alert('统计结果已保存');
-                    } else {
-                        alert('保存失败: ' + data.error);
-                    }
-                });
-            }
-            </script>	
-            <script>
-                function queryHistory() {
-                    const formData = new FormData(document.getElementById('historyForm'));
-                    fetch('/query_stats_history', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if(data.error) {
-                            alert(data.error);
-                            return;
-                        }
-                        
-                        if(data.length === 0) {
-                            document.getElementById('historyResults').innerHTML = '<p>没有找到历史记录</p>';
-                            return;
-                        }
-                        
-                        let html = '<h4>历史统计记录</h4><table><tr><th>日期</th><th>时段</th><th>温度(avg)</th><th>湿度(avg)</th><th>相关系数</th><th>操作</th></tr>';
-                        
-                        data.forEach(item => {
-                            html += `
-                                <tr>
-                                    <td>${item.start_date}</td>
-                                    <td>${item.start_time}-${item.end_time}</td>
-                                    <td>${parseFloat(item.temp_avg).toFixed(2)}°C</td>
-                                    <td>${parseFloat(item.hum_avg).toFixed(2)}%</td>
-                                    <td>${parseFloat(item.correlation).toFixed(4)}</td>
-                                    <td><button onclick="showDetail('${item.id}')">详情</button></td>
-                                </tr>
-                            `;
-                        });
-                        
-                        html += '</table>';
-                        document.getElementById('historyResults').innerHTML = html;
-                    });
-                }
+            <h5>湿度分布</h5>
+            <table>${formatBins(data.hum_bins)}</table>
+        `;
+        
+        document.getElementById('statsResults').innerHTML = html;
+    });
+}
+
+function formatBins(bins) {
+    let rows = '';
+    for(const [range, percent] of Object.entries(bins)) {
+        rows += `<tr><td>${range}</td><td>${percent.toFixed(2)}%</td></tr>`;
+    }
+    return rows;
+}
+
+function saveStats() {
+    const formData = new FormData(document.getElementById('statsForm'));
+    fetch('/save_stats', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.success) {
+            alert('统计结果已保存');
+        } else {
+            alert('保存失败: ' + data.error);
+        }
+    });
+}
+</script>	
+<script>
+function queryHistory() {
+const formData = new FormData(document.getElementById('historyForm'));
+fetch('/query_stats_history', {
+method: 'POST',
+body: formData
+})
+.then(response => response.json())
+.then(data => {
+if(data.error) {
+    alert(data.error);
+    return;
+}
+
+if(data.length === 0) {
+    document.getElementById('historyResults').innerHTML = '<p>没有找到历史记录</p>';
+    return;
+}
+
+let html = '<h4>历史统计记录</h4><table><tr><th>日期</th><th>时段</th><th>温度(avg)</th><th>湿度(avg)</th><th>相关系数</th><th>操作</th></tr>';
+
+data.forEach(item => {
+    html += `
+        <tr>
+            <td>${item.start_date}</td>
+            <td>${item.start_time}-${item.end_time}</td>
+            <td>${parseFloat(item.temp_avg).toFixed(2)}°C</td>
+            <td>${parseFloat(item.hum_avg).toFixed(2)}%</td>
+            <td>${parseFloat(item.correlation).toFixed(4)}</td>
+            <td><button onclick="showDetail('${item.id}')">详情</button></td>
+        </tr>
+    `;
+});
+
+html += '</table>';
+document.getElementById('historyResults').innerHTML = html;
+});
+}
                 
-                function showDetail(id) {
-                    fetch('/get_stats_detail?id=' + id)
-                    .then(response => response.json())
-                    .then(data => {
-                        if(data.error) {
-                            alert(data.error);
-                            return;
-                        }
-                        
-                        let html = `
-                            <h4>详细统计结果 (${data.start_date} ${data.start_time}-${data.end_time})</h4>
-                            <table>
-                                <tr><th colspan="2">温度统计</th><th colspan="2">湿度统计</th></tr>
-                                <tr>
-                                    <td>平均值:</td><td>${parseFloat(data.temp_avg).toFixed(2)}°C</td>
-                                    <td>平均值:</td><td>${parseFloat(data.hum_avg).toFixed(2)}%</td>
-                                </tr>
-                                <!-- 其他统计项显示... -->
-                            </table>
-                            <button onclick="document.getElementById('historyResults').innerHTML = ''">关闭</button>
-                        `;
-                        
-                        document.getElementById('historyResults').innerHTML += html;
-                    });
-                }
-                </script>
+function showDetail(id) {
+fetch('/get_stats_detail?id=' + id)
+.then(response => response.json())
+.then(data => {
+    if(data.error) {
+        alert(data.error);
+        return;
+    }
+    
+    let html = `
+        <div class="stats-detail">
+            <h4>详细统计结果 (${data.start_date} ${data.start_time}-${data.end_time})</h4>
+            <table>
+                <tr><th colspan="2">温度统计</th><th colspan="2">湿度统计</th></tr>
+                <tr>
+                    <td>平均值:</td><td>${parseFloat(data.temp_avg).toFixed(2)}°C</td>
+                    <td>平均值:</td><td>${parseFloat(data.hum_avg).toFixed(2)}%</td>
+                </tr>
+                <tr>
+                    <td>最小值:</td><td>${parseFloat(data.temp_min).toFixed(2)}°C</td>
+                    <td>最小值:</td><td>${parseFloat(data.hum_min).toFixed(2)}%</td>
+                </tr>
+                <tr>
+                    <td>最大值:</td><td>${parseFloat(data.temp_max).toFixed(2)}°C</td>
+                    <td>最大值:</td><td>${parseFloat(data.hum_max).toFixed(2)}%</td>
+                </tr>
+                <tr>
+                    <td>中位数:</td><td>${parseFloat(data.temp_median).toFixed(2)}°C</td>
+                    <td>中位数:</td><td>${parseFloat(data.hum_median).toFixed(2)}%</td>
+                </tr>
+                <tr><td colspan="4">相关系数: ${parseFloat(data.correlation).toFixed(4)}</td></tr>
+            </table>
+            
+            <h5>温度分布</h5>
+            <table>
+                ${formatBins(data.temp_bins)}
+            </table>
+            
+            <h5>湿度分布</h5>
+            <table>
+                ${formatBins(data.hum_bins)}
+            </table>
+            
+            <button onclick="this.parentElement.remove()">关闭</button>
+        </div>
+    `;
+    
+    document.getElementById('historyResults').innerHTML += html;
+});
+}
+
+function formatBins(bins) {
+    let rows = '';
+    for(const [range, percent] of Object.entries(bins)) {
+        rows += `<tr><td>${range}</td><td>${parseFloat(percent).toFixed(2)}%</td></tr>`;
+    }
+    return rows;
+}
+</script>
 </body>
 </html>

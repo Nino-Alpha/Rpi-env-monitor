@@ -104,3 +104,41 @@ body{
 .history-results button:hover {
   background-color: #989595;
 }
+/*查询结果表格样式*/
+.stats-detail {
+  margin: 20px 0;
+  padding: 15px;
+  /* background: #f9f9f9; */
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.stats-detail table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+}
+
+.stats-detail th, .stats-detail td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.stats-detail th {
+  background-color: #7c7a7a;
+}
+
+.stats-detail button {
+  margin-top: 10px;
+  padding: 5px 10px;
+  /* background-color: #f44336; */
+  color: rgb(132, 128, 128);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.stats-detail button:hover {
+  background-color: #696666;
+}
