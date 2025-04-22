@@ -11,6 +11,8 @@ from flask import g
 from flask import Response
 from flask import redirect
 from flask import session
+from flask import jsonify
+from flask import json
 import sqlite3
 from camera_pi2 import Camera
 import time
@@ -22,7 +24,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.header import Header
 from threading import Thread
-
+import numpy as np
 #from Sensors_Database_Beta import logDHT
 
 app = Flask(__name__)
@@ -77,8 +79,7 @@ def maxRowsTable():
     maxNumberRows = curs.fetchone()[0] 
     return maxNumberRows
 
-def gen(camera): 
-    
+def gen(camera):    
     while True:
         frame = camera.get_frame()
         yield (b'--frame\r\n'
@@ -185,6 +186,76 @@ def log_alarm(alarm_type, current_value, threshold):
     curs = db.cursor()
     curs.execute("INSERT INTO alarm_logs (timestamp, alarm_type, current_value, threshold) VALUES (datetime('now','localtime'), ?, ?, ?)",
                  (alarm_type, current_value, threshold))
+    db.commit()
+
+# 数据统计函数
+def calculate_statistics(selected_date, start_time, end_time):
+    db = get_db()
+    curs = db.cursor()
+    
+    # 查询数据
+    query = """
+        SELECT temp, hum FROM DHT_data
+        WHERE DATE(timestamp) = ? AND TIME(timestamp) BETWEEN ? AND ?
+    """
+    curs.execute(query, (selected_date, start_time, end_time))
+    data = np.array(curs.fetchall())
+    
+    if len(data) == 0:
+        return None
+    
+    temps = data[:, 0]
+    hums = data[:, 1]
+    
+    # 基础统计
+    stats = {
+        'temp_avg': np.mean(temps),
+        'temp_min': np.min(temps),
+        'temp_max': np.max(temps),
+        'temp_median': np.median(temps),
+        'hum_avg': np.mean(hums),
+        'hum_min': np.min(hums),
+        'hum_max': np.max(hums),
+        'hum_median': np.median(hums),
+        'correlation': np.corrcoef(temps, hums)[0, 1]
+    }
+    
+    # 温度区间百分比
+    temp_bins = [0, 10, 20, 30, 40, 50]
+    temp_counts, _ = np.histogram(temps, bins=temp_bins)
+    stats['temp_bins'] = {
+        f'{temp_bins[i]}-{temp_bins[i+1]}': count/len(temps)*100 
+        for i, count in enumerate(temp_counts)
+    }
+    
+    # 湿度区间百分比
+    hum_bins = [10, 20, 30, 40, 50, 60, 70, 80, 90]
+    hum_counts, _ = np.histogram(hums, bins=hum_bins)
+    stats['hum_bins'] = {
+        f'{hum_bins[i]}-{hum_bins[i+1]}': count/len(hums)*100 
+        for i, count in enumerate(hum_counts)
+    }
+    
+    return stats
+
+def save_stats_result(start_date, end_date, start_time, end_time, stats):
+    db = get_db()
+    curs = db.cursor()
+
+    temp_bins = json.dumps(stats['temp_bins'])
+    hum_bins = json.dumps(stats['hum_bins'])
+
+    curs.execute('''INSERT INTO stats_results (
+        start_date, end_date, start_time, end_time,
+        temp_avg, temp_min, temp_max, temp_median,
+        hum_avg, hum_min, hum_max, hum_median,
+        correlation, temp_bins, hum_bins
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+        start_date, end_date, start_time, end_time,
+        stats['temp_avg'], stats['temp_min'], stats['temp_max'], stats['temp_median'],
+        stats['hum_avg'], stats['hum_min'], stats['hum_max'], stats['hum_median'],
+        stats['correlation'], temp_bins, hum_bins
+    ))
     db.commit()
 
 # 阈值设置路由
@@ -380,6 +451,7 @@ def select_graph():
     # 计算一阶差分
     temp_diff = [0] + [temps[i] - temps[i-1] for i in range(1, len(temps))]
     hum_diff = [0] + [hums[i] - hums[i-1] for i in range(1, len(hums))]
+
     # 使用Plotly绘制温度差分图像
     trace_temp_diff = go.Scatter(x=times, y=temp_diff, mode='lines', name='温度变化 (°C)')
     layout_temp_diff = go.Layout(
@@ -470,7 +542,114 @@ def select_graph():
         'plot_div_hum_compare': plot_div_hum_compare  # 湿度对比图
     }
     return render_template('graphs.html', **templateData)
-#中转路由
+# ... existing code ...
+# 数据统计计算路由
+@app.route('/calculate_stats', methods=['POST'])
+def handle_calculate_stats():
+    selected_date = request.form['stats_date']
+    start_time = request.form['stats_start']
+    end_time = request.form['stats_end']
+    
+    stats = calculate_statistics(selected_date, start_time, end_time)
+    if not stats:
+        return jsonify({'error': '没有找到指定时段的数据'})
+    
+    return jsonify(stats)
+# 数据统计保存路由
+@app.route('/save_stats', methods=['POST'])
+def handle_save_stats():
+    try:
+        selected_date = request.form['stats_date']
+        start_time = request.form['stats_start']
+        end_time = request.form['stats_end']
+        
+        stats = calculate_statistics(selected_date, start_time, end_time)
+        if not stats:
+            return jsonify({'error': '没有找到指定时段的数据'})
+            
+        save_stats_result(selected_date, selected_date, start_time, end_time, stats)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# 数据统计历史查询路由
+@app.route('/query_stats_history', methods=['POST'])
+def query_stats_history():
+    start_date = request.form['start_date']
+    end_date = request.form['end_date']
+    
+    db = get_db()
+    curs = db.cursor()
+    curs.execute('''
+        SELECT id, start_date, start_time, end_time, 
+               temp_avg, hum_avg, correlation
+        FROM stats_results
+        WHERE start_date BETWEEN ? AND ?
+        ORDER BY start_date DESC, start_time DESC
+    ''', (start_date, end_date))
+    
+    rows = curs.fetchall()
+    if not rows:
+        return jsonify({'error': '没有找到指定日期范围内的记录'})
+    
+    # 转换为字典列表
+    results = []
+    for row in rows:
+        results.append({
+            'id': row[0],
+            'start_date': row[1],
+            'start_time': row[2],
+            'end_time': row[3],
+            'temp_avg': row[4],
+            'hum_avg': row[5],
+            'correlation': row[6]
+        })
+    
+    return jsonify(results)
+# 数据统计详情查询路由
+@app.route('/get_stats_detail')
+def get_stats_detail():
+    record_id = request.args.get('id')
+    
+    db = get_db()
+    curs = db.cursor()
+    curs.execute('''
+        SELECT * FROM stats_results WHERE id = ?
+    ''', (record_id,))
+    
+    row = curs.fetchone()
+    if not row:
+        return jsonify({'error': '记录不存在'})
+    
+    # 解析JSON格式的区间数据
+    
+    # 修复JSON解析问题
+    def safe_json_loads(json_str):
+        try:
+            return json.loads(json_str.replace("'", '"'))  # 将单引号替换为双引号
+        except:
+            return {}
+    temp_bins = safe_json_loads(row[14]) if row[14] else {}
+    hum_bins = safe_json_loads(row[15]) if row[14] else {}
+    
+    return jsonify({
+        'id': row[0],
+        'start_date': row[1],
+        'end_date': row[2],
+        'start_time': row[3],
+        'end_time': row[4],
+        'temp_avg': row[5],
+        'temp_min': row[6],
+        'temp_max': row[7],
+        'temp_median': row[8],
+        'hum_avg': row[9],
+        'hum_min': row[10],
+        'hum_max': row[11],
+        'hum_median': row[12],
+        'correlation': row[13],
+        'temp_bins': temp_bins,
+        'hum_bins': hum_bins
+    })
 
 # 参数提交路由2 ：数据检测频率
 @app.route('/set_frequency', methods=['POST'])

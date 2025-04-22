@@ -35,6 +35,72 @@ body{
     background-color: #45a049; /* 悬停时的背景颜色 */
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* 悬停时的阴影效果 */
 }
+/*计算结果表格样式*/
+.stats-control {
+  margin: 20px auto;
+  padding: 15px;
+  /* background: #f5f5f5; */
+  border-radius: 5px;
+  max-width: 800px;
+}
 
+.stats-results {
+  margin-top: 20px;
+  text-align: left;
+}
 
+.stats-results table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+}
+
+.stats-results th, .stats-results td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.stats-results th {
+  background-color: #bbb8b8;
+}
 /*表格样式*/
+.history-query {
+  margin: 20px auto;
+  padding: 15px;
+  /* background: #f0f8ff; */
+  border-radius: 5px;
+  max-width: 800px;
+}
+
+.history-results {
+  margin-top: 20px;
+}
+
+.history-results table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-results th, .history-results td {
+  border: 1px solid #8d8a8a;
+  padding: 8px;
+  text-align: center;
+}
+
+.history-results th {
+  background-color: #6d6e70;
+}
+
+.history-results button {
+  padding: 5px 10px;
+  /* background-color: #4CAF50; */
+  /* color: white; */
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.history-results button:hover {
+  background-color: #989595;
+}
