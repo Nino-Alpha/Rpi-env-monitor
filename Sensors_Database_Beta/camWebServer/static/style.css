@@ -156,3 +156,14 @@ body{
   display: block;
   margin: 20px 0;
 }
+ /*饼图样式*/
+ .pie-charts-container {
+  display: flex;
+  justify-content: space-around;
+  margin: 20px 0;
+}
+
+#tempPieChart, #humPieChart {
+  width: 45%;
+  min-height: 400px;
+}

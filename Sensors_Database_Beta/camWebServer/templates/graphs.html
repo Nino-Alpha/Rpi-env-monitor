@@ -84,20 +84,16 @@
             <!-- 统计结果将在这里显示 -->
         </div>
         <hr>
-        <!-- 在statsResults div后添加柱形图容器 -->
-        <!-- <div id="hourlyCharts">
-            {% if hourly_charts %}
-            <div class="chart-container">
-                {{ hourly_charts.temp_chart|safe }}
-            </div>
-            <div class="chart-container">
-                {{ hourly_charts.hum_chart|safe }}
-            </div>
-            {% endif %}
-        </div> -->
         <div id="hourlyCharts">
             <div id="hourlyTempChart" style="width: 100%; height: 400px;"></div>
             <div id="hourlyHumChart" style="width: 100%; height: 400px;"></div>
+        </div>
+        <hr>
+        <h3>温湿度分布</h3>
+        <!-- 在适当位置添加饼图容器 -->
+        <div class="pie-charts-container">
+            <div id="tempPieChart"></div>
+            <div id="humPieChart"></div>
         </div>
     </div>
     <hr>
@@ -182,9 +178,19 @@ function calculateStats() {
         `;
         
         document.getElementById('statsResults').innerHTML = html;
-
+        
         if(data.hourly_stats) {
             drawHourlyCharts(data.hourly_stats);
+        }
+        if(data.temp_pie) {
+            Plotly.newPlot('tempPieChart', 
+            data.temp_pie.data, 
+            data.temp_pie.layout);
+        }
+        if(data.hum_pie) {
+            Plotly.newPlot('humPieChart', 
+            data.hum_pie.data, 
+            data.hum_pie.layout);
         }
     });
 }
