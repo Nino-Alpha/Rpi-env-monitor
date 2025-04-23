@@ -33,9 +33,25 @@
         {{ plot_div_hum|safe }}
     </div>
     <hr>
-    <!-- 显示温湿度组合图表 -->
     <div class="chart-container">
-    {{ plot_div_combined|safe }}
+        {{ plot_div_temp_ho|safe }}
+        </div>
+        <hr>
+    <div class="chart-container">
+        {{ plot_div_hum_ho|safe }}
+        </div>
+        <hr>
+    <div class="chart-container">
+        {{ plot_div_temp_sm|safe }}
+        </div>
+        <hr>
+    <div class="chart-container">
+        {{ plot_div_hum_sm|safe }}
+        </div>
+        <hr>
+    <!-- 显示温湿度散点图表 -->
+    <div class="chart-container">
+    {{ plot_div_temp_hum|safe }}
     </div>
     <hr>
     <!-- 显示温湿度一阶差分图表 -->
@@ -292,7 +308,6 @@ function formatBins(bins) {
     }
     return rows;
 }
-
 function saveStats() {
     const formData = new FormData(document.getElementById('statsForm'));
     fetch('/save_stats', {
@@ -308,6 +323,7 @@ function saveStats() {
         }
     });
 }
+
 </script>	
 <script>
 function queryHistory() {
