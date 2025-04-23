@@ -209,6 +209,9 @@ def calculate_statistics(selected_date, start_time, end_time):
     temps = data[:, 0]
     hums = data[:, 1]
     
+    # 处理离群值
+    temps = handle_outliers(temps)
+    hums = handle_outliers(hums)
     # 基础统计
     stats = {
         'temp_avg': np.mean(temps),
