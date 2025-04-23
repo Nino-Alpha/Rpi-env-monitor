@@ -16,7 +16,7 @@ def getDHTdata(retries=5):
             try:
                 # 读取温湿度数据
                 temp = dht.temperature
-                hum = dht.humidity
+                hum = dht.humidity + 9 # 湿度值加9，校正值
                 if hum is not None and temp is not None:
                     hum = round(hum)
                     temp = round(temp, 1)
