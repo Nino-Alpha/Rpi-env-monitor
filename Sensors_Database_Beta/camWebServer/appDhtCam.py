@@ -413,11 +413,14 @@ def train_predict_model(data_type='temp', look_back=None):
     """
     db = get_db()
     curs = db.cursor()
-    curs.execute(f"SELECT {data_type} FROM DHT_data ORDER BY timestamp DESC LIMIT 600") # 600个数据点，约10小时数据
+    curs.execute(f"SELECT {data_type} FROM DHT_data ORDER BY timestamp DESC LIMIT 1000") # 1000个数据点
     data = np.array(curs.fetchall()).flatten()
      # 获取数据采集频率
     freq = getLastFreq() / 60  # 分钟/次
-    
+
+    # data = data.astype(float)
+    # data = np.log1p(data)  # 使用log(1+x)避免零值问题
+
     # 自动计算合适的look_back
     if look_back is None:
         if freq <= 5:  # 高频采集(<=5分钟/次)
@@ -437,7 +440,7 @@ def train_predict_model(data_type='temp', look_back=None):
         max_p=5,        # p的最大值
         max_q=5,        # q的最大值
         d=1,           # 差分阶数
-        seasonal=True,  # 考虑季节性
+        seasonal=True,  # 不考虑季节性
         m=24,          # 季节性周期(24小时)
         trace=True,     # 打印搜索过程
         error_action='ignore',
@@ -484,7 +487,6 @@ def predict():
     model = train_predict_model(data_type)
     forecast = model.predict(n_periods=steps)
 
-
     return jsonify({
         'predictions': forecast.tolist(),
         'type': data_type,
@@ -508,15 +510,19 @@ def evaluate_prediction():
         # 获取真实数据
         db = get_db()
         curs = db.cursor()
-        curs.execute(f"SELECT {data_type} FROM DHT_data ORDER BY timestamp ASC LIMIT {steps*2}")
+        curs.execute(f"SELECT {data_type} FROM DHT_data ORDER BY timestamp ASC LIMIT {steps*4}")
         data = np.array(curs.fetchall()).flatten()
-        
+
         if len(data) < steps*2:
             return jsonify({'error': f'需要至少{steps*2}个历史数据点进行评估'})
         
         # 分割数据：前steps个用于训练，后steps个用于验证
-        train_data = data[:steps]
-        test_data = data[steps:]
+        # 分割数据：前3/4用于训练，后1/4用于验证
+        train_size = int(len(data) * 0.75)
+        train_data = data[:train_size]
+        test_data = data[train_size:train_size+steps]  # 确保测试数据长度
+        # train_data = data[:steps*3]
+        # test_data = data[steps*3:]
         
         # 训练模型
         model = auto_arima(
@@ -531,12 +537,14 @@ def evaluate_prediction():
             suppress_warnings=True,
             stepwise=True
         )
-        
         # 进行预测
         forecast = model.predict(n_periods=steps)
+        # 确保预测和测试数据长度一致
+        min_len = min(len(test_data), len(forecast))
+        test_data = test_data[:min_len]
+        forecast = forecast[:min_len]
         # 计算评估指标
         metrics = calculate_metrics(test_data, forecast)
-        
         # 返回评估结果
         return jsonify({
             'model_order': str(model.order),        # 未使用
