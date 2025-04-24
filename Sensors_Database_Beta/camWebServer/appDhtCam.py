@@ -25,7 +25,11 @@ from email.mime.text import MIMEText
 from email.header import Header
 from threading import Thread
 import numpy as np
-#from Sensors_Database_Beta import logDHT
+from sklearn.preprocessing import MinMaxScaler  
+from statsmodels.tsa.arima.model import ARIMA
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense #需要虚拟环境兼容运行。py3.10/py3.9
+from pmdarima import auto_arima 
 
 app = Flask(__name__)
 # 设置session密钥
@@ -214,21 +218,21 @@ def calculate_statistics(selected_date, start_time, end_time):
     hums = handle_outliers(hums)
     # 基础统计
     stats = {
-        'temp_avg': np.mean(temps),
-        'temp_min': np.min(temps),
-        'temp_max': np.max(temps),
-        'temp_median': np.median(temps),
-        'hum_avg': np.mean(hums),
-        'hum_min': np.min(hums),
-        'hum_max': np.max(hums),
-        'hum_median': np.median(hums),
-        'correlation': np.corrcoef(temps, hums)[0, 1],  
+        'temp_avg': float(np.mean(temps)),  # 转换为float
+        'temp_min': float(np.min(temps)),
+        'temp_max': float(np.max(temps)),
+        'temp_median': float(np.median(temps)),
+        'hum_avg': float(np.mean(hums)),
+        'hum_min': float(np.min(hums)),
+        'hum_max': float(np.max(hums)),
+        'hum_median': float(np.median(hums)),
+        'correlation': float(np.corrcoef(temps, hums)[0, 1]),
     }
     # 温度区间百分比
     temp_bins = [0, 10, 20, 30, 40, 50]
     temp_counts, _ = np.histogram(temps, bins=temp_bins)
     stats['temp_bins'] = {
-        f'{temp_bins[i]}-{temp_bins[i+1]}': count/len(temps)*100 
+        f'{temp_bins[i]}-{temp_bins[i+1]}': float(count/len(temps)*100)  # 转换为float
         for i, count in enumerate(temp_counts)
     }
     
@@ -236,10 +240,14 @@ def calculate_statistics(selected_date, start_time, end_time):
     hum_bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
     hum_counts, _ = np.histogram(hums, bins=hum_bins)
     stats['hum_bins'] = {
-        f'{hum_bins[i]}-{hum_bins[i+1]}': count/len(hums)*100 
+        f'{hum_bins[i]}-{hum_bins[i+1]}': float(count/len(hums)*100)  # 转换为float
         for i, count in enumerate(hum_counts)
     }
     hourly_stats = calculate_hourly_statistics(selected_date, start_time, end_time) # 计算每小时统计数据
+    for stat in hourly_stats:
+        for key in stat:
+            if stat[key] is not None and isinstance(stat[key], (np.integer, np.floating)):
+                stat[key] = float(stat[key])
     # 生成温度和湿度的饼图数据结构
     temp_pie = {
         'data': [{
@@ -329,22 +337,24 @@ def calculate_hourly_statistics(selected_date, start_time, end_time):
             })
             continue
             
-        temps = data[:, 0]
-        hums = data[:, 1]
-        
-        hourly_stats.append({
-            'time_range': f"{hour_start}-{hour_end}",
-            'temp_avg': np.mean(temps),
-            'temp_min': np.min(temps),
-            'temp_max': np.max(temps),
-            'temp_median': np.median(temps),
-            'hum_avg': np.mean(hums),
-            'hum_min': np.min(hums),
-            'hum_max': np.max(hums),
-            'hum_median': np.median(hums)
-        })
+        else:
+            temps = data[:, 0]
+            hums = data[:, 1]
+            
+            hourly_stats.append({
+                'time_range': f"{hour_start}-{hour_end}",
+                'temp_avg': float(np.mean(temps)) if len(temps) > 0 else None,
+                'temp_min': float(np.min(temps)) if len(temps) > 0 else None,
+                'temp_max': float(np.max(temps)) if len(temps) > 0 else None,
+                'temp_median': float(np.median(temps)) if len(temps) > 0 else None,
+                'hum_avg': float(np.mean(hums)) if len(hums) > 0 else None,
+                'hum_min': float(np.min(hums)) if len(hums) > 0 else None,
+                'hum_max': float(np.max(hums)) if len(hums) > 0 else None,
+                'hum_median': float(np.median(hums)) if len(hums) > 0 else None
+            })
     
     return hourly_stats
+    
 
 # 离群值处理函数
 def handle_outliers(data, threshold=3.0):
@@ -354,8 +364,8 @@ def handle_outliers(data, threshold=3.0):
     :param threshold: Z-score阈值，默认3.0
     :return: 处理后的数据列表
     """
-    if not data:
-        return data
+    if data is None or len(data) == 0:  # 修改判断条件
+        return data if isinstance(data, list) else []
         
     data = np.array(data)
     mean = np.mean(data)
@@ -394,6 +404,79 @@ def smooth_data(data, window_size=5):
     
     return smoothed.tolist()
 
+# 新增预测相关函数
+def train_predict_model(data_type='temp', look_back=None):
+    """
+    训练预测模型(统一使用ARIMA)
+    :param data_type: 数据类型 'temp'或'hum'
+    :param look_back: 使用多少历史数据点进行训练
+    :return: 训练好的模型
+    """
+    db = get_db()
+    curs = db.cursor()
+    curs.execute(f"SELECT {data_type} FROM DHT_data ORDER BY timestamp DESC LIMIT 1000")
+    data = np.array(curs.fetchall()).flatten()
+     # 获取数据采集频率
+    freq = getLastFreq() / 60  # 分钟/次
+    
+    # 自动计算合适的look_back
+    if look_back is None:
+        if freq <= 5:  # 高频采集(<=5分钟/次)
+            # 10小时数据点数 = 6 * (60 / freq)
+            look_back = int(10 * (60 / freq))  # 例如freq=5 → 144
+        elif freq <= 60:  # 中频(<=1小时/次)
+            # 24小时数据点数 = 24 * (60 / freq)
+            look_back = int(24 * (60 / freq))  # 例如freq=60 → 24
+        else:  # 低频(>1小时/次)
+            # 7天数据点数 = 7 * 24 * (60 / freq)
+            look_back = int(7 * 24 * (60 / freq))  # 例如freq=120 → 84
+    # 使用auto_arima自动选择最佳参数
+    model = auto_arima(
+        data,
+        start_p=1,      # p的最小值
+        start_q=1,      # q的最小值
+        max_p=5,        # p的最大值
+        max_q=5,        # q的最大值
+        d=1,           # 差分阶数
+        seasonal=True,  # 考虑季节性
+        m=24,          # 季节性周期(24小时)
+        trace=True,     # 打印搜索过程
+        error_action='ignore',
+        suppress_warnings=True,
+        stepwise=True   # 使用逐步算法加速
+    )
+    return model
+
+# 预测路由
+@app.route('/predict', methods=['POST'])
+def predict():
+    data_type = request.form.get('type', 'temp')  # temp或hum
+    # 获取采集频率并计算合理的默认步长
+    # freq = getLastFreq() / 60  # 转换为分钟
+    # if freq <= 5:  # 高频采集
+    #     default_steps = 12  # 1小时数据(12×5分钟)
+    # elif freq <= 60:  # 中频
+    #     default_steps = 6   # 6小时
+    # else:  # 低频
+    #     default_steps = 3   # 6小时(3×120分钟)
+    steps = int(request.form.get('steps', 6))     # 预测步长
+    
+    model = train_predict_model(data_type)
+    forecast = model.predict(n_periods=steps)
+    
+    return jsonify({
+        'predictions': forecast.tolist(),
+        'type': data_type,
+        'steps': steps,
+        'model_order': str(model.order)  # 返回模型参数
+    })
+# 添加定时模型更新任务
+def update_models_periodically():
+    with app.app_context():
+        while True:
+            train_predict_model('temp')
+            train_predict_model('hum')
+            time.sleep(3600)  # 每小时更新一次模型
 # 阈值设置路由
 @app.route('/set_thresholds', methods=['POST'])
 def set_thresholds():
@@ -534,6 +617,8 @@ def select_graph():
 #去除离群值
     temps_ho = handle_outliers(temps)
     hums_ho = handle_outliers(hums)
+    temps2_ho = handle_outliers(temps2)
+    hums2_ho = handle_outliers(hums2)
 # 温度制图
     trace_temp_ho = go.Scatter(
         x=times,  # x轴数据（时间）
@@ -660,7 +745,11 @@ def select_graph():
     layout_temp_diff = go.Layout(
         title='一阶差分·温度变化量',
         xaxis=dict(title='时间'),
-        yaxis=dict(title='温度变化 (°C)'),
+        yaxis=dict(
+        title='温度变化 (°C)',
+        range=[-5, 5],  # 强制y轴范围在-5到5之间
+        autorange=False  # 禁用自动缩放
+    ),
         hovermode='x unified'
     )
     fig_temp_diff = go.Figure(data=[trace_temp_diff], layout=layout_temp_diff)
@@ -671,22 +760,26 @@ def select_graph():
     layout_hum_diff = go.Layout(
         title='一阶差分·湿度变化量',
         xaxis=dict(title='时间'),
-        yaxis=dict(title='湿度变化 (%)'),
+        yaxis=dict(
+        title='湿度变化 (%)',
+        range=[-10, 10],  # 强制y轴范围在-15到15之间
+        autorange=False  # 禁用自动缩放
+    ),
         hovermode='x unified'
     )
     fig_hum_diff = go.Figure(data=[trace_hum_diff], layout=layout_hum_diff)
     plot_div_hum_diff = pyo.plot(fig_hum_diff, output_type='div', include_plotlyjs=False)
      # 使用Plotly绘制温度对比图像
     trace_temp = go.Scatter(
-    x=list(range(len(temps))),  # x轴数据（索引）
-    y=temps,              # y轴数据（温度值）
+    x=list(range(len(temps_ho))),  # x轴数据（索引）
+    y=temps_ho,              # y轴数据（温度值）
     mode='lines',
     name=f'{selected_date2} 温度 (°C)',
     hovertemplate='时间: %{text|%H:%M}<br>温度: %{y}°C<extra></extra>',  # 自定义悬停模板
     text=times            # 将时间数据绑定到text属性，供hovertemplate调用
 )
-    trace_temp2 = go.Scatter(x=list(range(len(temps2))),
-    y=temps2,
+    trace_temp2 = go.Scatter(x=list(range(len(temps2_ho))),
+    y=temps2_ho,
     mode='lines', 
     name=f'{selected_date2_1} 温度 (°C)',
     hovertemplate='时间: %{text|%H:%M}<br>湿度: %{y}°C<extra></extra>',  # 自定义悬停模板
@@ -703,16 +796,16 @@ def select_graph():
 
     # 使用Plotly绘制湿度对比图像
     trace_hum = go.Scatter(
-    x=list(range(len(hums))),  # x轴数据（索引）
-    y=hums,              # y轴数据（湿度值）
+    x=list(range(len(hums_ho))),  # x轴数据（索引）
+    y=hums_ho,              # y轴数据（湿度值）
     mode='lines',
     name=f'{selected_date2} 湿度 (%)',
     hovertemplate='时间: %{text|%H:%M}<br>湿度: %{y}%<extra></extra>',  # 自定义悬停模板
     text=times            # 将时间数据绑定到text属性，供hovertemplate调用
 )
     trace_hum2 = go.Scatter(
-    x=list(range(len(hums2))),  # x轴数据（索引）
-    y=hums2, 
+    x=list(range(len(hums2_ho))),  # x轴数据（索引）
+    y=hums2_ho, 
     mode='lines', 
     name=f'{selected_date2_1} 湿度 (%)',
     hovertemplate='时间: %{text|%H:%M}<br>湿度: %{y}%<extra></extra>',  # 自定义悬停模板
@@ -870,11 +963,15 @@ def set_frequency():
     # 返回最新频率
     sampleFreq = getLastFreq()
     # 返回最新数据
+    current_th = get_current_threshold()
+    thresholds = getThresholds()
     time, temp, hum = getLastData()
     templateData = {
         'time': time,
         'temp': temp,
         'hum': hum,
+        'current_th': current_th,
+        'thresholds': thresholds,
         'sampleFreq': sampleFreq   ###
     }
     return render_template('index.html', **templateData)

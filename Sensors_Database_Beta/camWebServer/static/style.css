@@ -167,3 +167,32 @@ body{
   width: 45%;
   min-height: 400px;
 }
+
+/* 添加到现有style标签中 */
+.prediction-control {
+    margin: 20px 0;
+    padding: 15px;
+    /* background: #f5f5f5; */
+    border-radius: 5px;
+}
+
+#predictionResults {
+    margin-top: 20px;
+}
+
+#predictionDetails table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+}
+
+#predictionDetails th, 
+#predictionDetails td {
+    padding: 8px;
+    border: 1px solid #878383;
+    text-align: left;
+}
+
+#predictionDetails th {
+    background-color: #717070;
+}

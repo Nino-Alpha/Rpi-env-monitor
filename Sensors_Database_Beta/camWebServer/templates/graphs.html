@@ -113,6 +113,98 @@
         </div>
     </div>
     <hr>
+    <!-- 在统计控制区域下方添加预测控制区域 -->
+<hr>
+<div class="prediction-control">
+    <h3>温湿度预测（ARIMA）</h3>
+    <p class="subtitle">基于ARIMA模型，读取最新数据进行预测</p>
+    <p> # 获取采集频率并采用合理的预测步长。
+        freq / 60  # 转换为分钟
+        if freq <= 5:  # 高频采集
+            default_steps = 12  # 1小时数据(12×5分钟)
+        elif freq <= 60:  # 中频
+            default_steps = 6   # 6小时
+        else:  # 低频
+            default_steps = 3   # 6小时(3×120分钟) 
+    </p>
+    <form id="predictForm">
+        <label for="predict_type">预测类型：</label>
+        <select id="predict_type" name="type" required>
+            <option value="temp">温度</option>
+            <option value="hum">湿度</option>
+        </select>
+        
+        <label for="predict_steps">预测步长：</label>
+        <input type="number" id="predict_steps" name="steps" min="1" max="24" value="6" required>
+        
+        <button type="button" onclick="makePrediction()">开始预测</button>
+    </form>
+    
+    <div id="predictionResults">
+        <!-- 预测结果将在这里显示 -->
+        <div id="predictionChart" style="width: 100%; height: 400px;"></div>
+        <div id="predictionDetails"></div>
+    </div>
+</div>
+
+<script>
+// 在现有JavaScript代码中添加预测相关函数
+function makePrediction() {
+    const formData = new FormData(document.getElementById('predictForm'));
+    
+    fetch('/predict', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.error) {
+            alert(data.error);
+            return;
+        }
+        
+        // 显示预测结果图表
+        const trace = {
+            x: Array.from({length: data.predictions.length}, (_, i) => i+1),
+            y: data.predictions,
+            mode: 'lines+markers',
+            name: '预测值',
+            line: {color: data.type === 'temp' ? 'red' : 'blue'}
+        };
+        
+        const layout = {
+            title: `${data.type === 'temp' ? '温度' : '湿度'}预测结果 (${data.steps}步)`,
+            xaxis: {title: '预测步数'},
+            yaxis: {title: data.type === 'temp' ? '温度 (°C)' : '湿度 (%)'}
+        };
+        
+        Plotly.newPlot('predictionChart', [trace], layout);
+        
+        // 显示预测详情
+        let html = `
+            <h4>预测详情</h4>
+            <p>预测类型: ${data.type === 'temp' ? '温度' : '湿度'}</p>
+            <p>预测步长: ${data.steps}</p>
+            <p>使用模型: ARIMA${data.model_order}</p>
+            <table>
+                <tr><th>步数</th><th>预测值</th></tr>
+        `;
+        
+        data.predictions.forEach((value, index) => {
+            html += `
+                <tr>
+                    <td>${index+1}</td>
+                    <td>${value.toFixed(2)}${data.type === 'temp' ? '°C' : '%'}</td>
+                </tr>
+            `;
+        });
+        
+        html += '</table>';
+        document.getElementById('predictionDetails').innerHTML = html;
+    });
+}
+</script>
+
     <div class="history-query">
         <h3>历史统计查询</h3>
         <form id="historyForm">
