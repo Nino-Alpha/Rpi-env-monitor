@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据统计图</title>
+    <link rel="stylesheet" href='../static/style.css'/>
+    <style>
+		body {
+			text-align: center;
+		}
+        
+    </style>
+	<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>统计结果</h1>
+    <p>样本折线图</p>
+    <!--显示统计时间段-->
+    <h3>当前时段：{{ selected_date2 }} {{ start_time }} ~ {{ end_time }}</h3>
+    <!-- <img src="{{ plot_url_temp }}" alt="温度图" width="49%">
+    <img src="{{ plot_url_hum }}" alt="湿度图" width="49%"> -->
+    <hr>
+	<!-- <div>{{ plot_div_temp | safe }}</div> -->
+    <!-- 显示温度图像 -->
+    <div class="chart-container"> 
+        {{ plot_div_temp|safe }}
+    </div>
+    <hr>
+    <!-- 显示湿度图像 -->
+    <div class="chart-container">
+        {{ plot_div_hum|safe }}
+    </div>
+    <hr>
+    <!-- 显示温湿度组合图表 -->
+    <div class="chart-container">
+    {{ plot_div_combined|safe }}
+    </div>
+    <hr>
+    <!-- 显示温湿度一阶差分图表 -->
+    <div class="chart-container">
+        {{ plot_div_temp_diff|safe }}
+        </div>
+        <hr>
+    <div class="chart-container">
+        {{ plot_div_hum_diff|safe }}
+        </div>
+        <hr>
+        <!-- 在页面中显示对比图 -->
+    <div class="chart-container">
+        {{ plot_div_temp_compare|safe }}
+    </div>
+    <div class="chart-container">
+        {{ plot_div_hum_compare|safe }}
+    </div>
+    <img src="{{ plot_url_compare }}" alt="温度对比图" width="49%">
+    <!--下载统计图-->
+    <hr>
+        <h3> 返回主页面 ==> <a href="/"class="button">RETURN</a></h3>	
+        <hr>
+        <p> @2025 Developed by Ningchy , BUPT 2021210585 </p>
+        <script>
+            function validateTime() {
+                // 获取开始时间和结束时间
+                const startTime = document.getElementById('start_time').value;
+                const endTime = document.getElementById('end_time').value;
+            
+                // 比较时间
+                if (startTime >= endTime) {
+                    alert('开始时间不能超过结束时间，请重新选择！');
+                    return false; // 阻止表单提交
+                }
+                return true; // 允许表单提交
+            }
+            </script>
+			
+</body>
+</html>

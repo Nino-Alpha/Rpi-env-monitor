@@ -11,8 +11,6 @@ from flask import g
 from flask import Response
 from flask import redirect
 from flask import session
-from flask import jsonify
-from flask import json
 import sqlite3
 from camera_pi2 import Camera
 import time
@@ -24,7 +22,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.header import Header
 from threading import Thread
-import numpy as np
+
 #from Sensors_Database_Beta import logDHT
 
 app = Flask(__name__)
@@ -40,7 +38,6 @@ EMAIL_CONFIG = {
     'receiver_email': 'chenyv287212@gmail.com',  # 收件邮箱
     'min_interval': 300  # 最小发送间隔，单位秒（5分钟）  
 }
-
 # 全局变量记录上次发送时间
 last_email_sent = {
     'temperature': 0,
@@ -62,7 +59,7 @@ def close_db(exception):
     db = g.pop('db', None) 
     if db is not None:
         db.close()
-# 获取最新数据
+
 def getLastData():
     db = get_db()
     curs = db.cursor()
@@ -72,15 +69,16 @@ def getLastData():
         time, temp, hum = str(row[0]), row[1], row[2]
         return time, temp, hum
     return None, None, None
-# 获取数据表行数
+
 def maxRowsTable():
     db = get_db()
     curs = db.cursor()
     curs.execute("SELECT COUNT(temp) FROM DHT_data")
     maxNumberRows = curs.fetchone()[0] 
     return maxNumberRows
-# 获取摄像头帧
-def gen(camera):    
+
+def gen(camera): 
+    
     while True:
         frame = camera.get_frame()
         yield (b'--frame\r\n'
@@ -102,13 +100,13 @@ def logFreq(sampleFreq):
     curs.execute("INSERT INTO Sample_freq values(datetime('now','localtime'), (?))", (sampleFreq,))
     db.commit()
     return None
-# 获取所有时段阈值
+
 def getThresholds():
     db = get_db()
     curs = db.cursor()
     curs.execute("SELECT * FROM thresholds ORDER BY period")
     return curs.fetchall()
-# 获取当前时段阈值
+
 def get_current_threshold():
     current_time = datetime.now().strftime("%H:%M")
     db = get_db()
@@ -181,7 +179,6 @@ def background_monitor():
             except Exception as e:
                 print(f"后台监控出错: {e}")
                 time.sleep(60)
-
 # 新增报警记录函数
 def log_alarm(alarm_type, current_value, threshold):
     db = get_db()
@@ -189,210 +186,6 @@ def log_alarm(alarm_type, current_value, threshold):
     curs.execute("INSERT INTO alarm_logs (timestamp, alarm_type, current_value, threshold) VALUES (datetime('now','localtime'), ?, ?, ?)",
                  (alarm_type, current_value, threshold))
     db.commit()
-
-# 数据统计函数
-def calculate_statistics(selected_date, start_time, end_time):
-    db = get_db()
-    curs = db.cursor()
-    
-    # 查询数据
-    query = """
-        SELECT temp, hum FROM DHT_data
-        WHERE DATE(timestamp) = ? AND TIME(timestamp) BETWEEN ? AND ?
-    """
-    curs.execute(query, (selected_date, start_time, end_time))
-    data = np.array(curs.fetchall())
-    
-    if len(data) == 0:
-        return None
-    
-    temps = data[:, 0]
-    hums = data[:, 1]
-    
-    # 处理离群值
-    temps = handle_outliers(temps)
-    hums = handle_outliers(hums)
-    # 基础统计
-    stats = {
-        'temp_avg': np.mean(temps),
-        'temp_min': np.min(temps),
-        'temp_max': np.max(temps),
-        'temp_median': np.median(temps),
-        'hum_avg': np.mean(hums),
-        'hum_min': np.min(hums),
-        'hum_max': np.max(hums),
-        'hum_median': np.median(hums),
-        'correlation': np.corrcoef(temps, hums)[0, 1],  
-    }
-    # 温度区间百分比
-    temp_bins = [0, 10, 20, 30, 40, 50]
-    temp_counts, _ = np.histogram(temps, bins=temp_bins)
-    stats['temp_bins'] = {
-        f'{temp_bins[i]}-{temp_bins[i+1]}': count/len(temps)*100 
-        for i, count in enumerate(temp_counts)
-    }
-    
-    # 湿度区间百分比
-    hum_bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
-    hum_counts, _ = np.histogram(hums, bins=hum_bins)
-    stats['hum_bins'] = {
-        f'{hum_bins[i]}-{hum_bins[i+1]}': count/len(hums)*100 
-        for i, count in enumerate(hum_counts)
-    }
-    hourly_stats = calculate_hourly_statistics(selected_date, start_time, end_time) # 计算每小时统计数据
-    # 生成温度和湿度的饼图数据结构
-    temp_pie = {
-        'data': [{
-            'labels': list(stats['temp_bins'].keys()),
-            'values': list(stats['temp_bins'].values()),
-            'type': 'pie'
-        }],
-        'layout': {
-            'title': '温度分布百分比'
-        }
-    }
-    hum_pie = {
-        'data': [{
-            'labels': list(stats['hum_bins'].keys()),
-            'values': list(stats['hum_bins'].values()),
-            'type': 'pie'
-        }],
-        'layout': {
-            'title': '湿度分布百分比'
-        }
-    }
-    stats.update({
-        'temp_pie': temp_pie,
-        'hum_pie': hum_pie,          
-        'hourly_stats': hourly_stats
-        })
-
-    return stats
-
-# 统计结果保存到数据库
-def save_stats_result(start_date, end_date, start_time, end_time, stats):
-    db = get_db()
-    curs = db.cursor()
-
-    temp_bins = json.dumps(stats['temp_bins'])
-    hum_bins = json.dumps(stats['hum_bins'])
-
-    curs.execute('''INSERT INTO stats_results (
-        start_date, end_date, start_time, end_time,
-        temp_avg, temp_min, temp_max, temp_median,
-        hum_avg, hum_min, hum_max, hum_median,
-        correlation, temp_bins, hum_bins
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
-        start_date, end_date, start_time, end_time,
-        stats['temp_avg'], stats['temp_min'], stats['temp_max'], stats['temp_median'],
-        stats['hum_avg'], stats['hum_min'], stats['hum_max'], stats['hum_median'],
-        stats['correlation'], temp_bins, hum_bins
-    ))
-    db.commit()
-
-# 计算每小时的统计数据
-def calculate_hourly_statistics(selected_date, start_time, end_time):
-    db = get_db()
-    curs = db.cursor()
-    
-    # 解析开始和结束时间
-    start_hour = int(start_time.split(':')[0])
-    end_hour = int(end_time.split(':')[0])
-    
-    hourly_stats = []
-    
-    for hour in range(start_hour, end_hour):
-        # 构建时间范围
-        hour_start = f"{hour:02d}:00"
-        hour_end = f"{hour+1:02d}:00"
-        
-        # 查询该小时的数据
-        query = """
-            SELECT temp, hum FROM DHT_data
-            WHERE DATE(timestamp) = ? 
-            AND TIME(timestamp) >= ? AND TIME(timestamp) < ?
-        """
-        curs.execute(query, (selected_date, hour_start, hour_end))
-        data = np.array(curs.fetchall())
-        
-        if len(data) == 0:
-            hourly_stats.append({
-                'time_range': f"{hour_start}-{hour_end}",
-                'temp_avg': None,
-                'temp_min': None,
-                'temp_max': None,
-                'temp_median': None,
-                'hum_avg': None,
-                'hum_min': None,
-                'hum_max': None,
-                'hum_median': None
-            })
-            continue
-            
-        temps = data[:, 0]
-        hums = data[:, 1]
-        
-        hourly_stats.append({
-            'time_range': f"{hour_start}-{hour_end}",
-            'temp_avg': np.mean(temps),
-            'temp_min': np.min(temps),
-            'temp_max': np.max(temps),
-            'temp_median': np.median(temps),
-            'hum_avg': np.mean(hums),
-            'hum_min': np.min(hums),
-            'hum_max': np.max(hums),
-            'hum_median': np.median(hums)
-        })
-    
-    return hourly_stats
-
-# 离群值处理函数
-def handle_outliers(data, threshold=3.0):
-    """
-    使用Z-score方法识别和处理离群值
-    :param data: 原始数据列表
-    :param threshold: Z-score阈值，默认3.0
-    :return: 处理后的数据列表
-    """
-    if not data:
-        return data
-        
-    data = np.array(data)
-    mean = np.mean(data)
-    std = np.std(data)
-    
-    # 计算Z-score
-    z_scores = np.abs((data - mean) / std)
-    
-    # 识别离群值
-    outliers = z_scores > threshold
-    
-    # 用中位数替换离群值
-    median = np.median(data)
-    data[outliers] = median
-    
-    return data.tolist()
-
-# 数据平滑函数
-def smooth_data(data, window_size=5):
-    """
-    使用移动平均法平滑数据
-    :param data: 原始数据列表
-    :param window_size: 窗口大小，默认5
-    :return: 平滑后的数据列表
-    """
-    if not data or len(data) < window_size:
-        return data
-        
-    window = np.ones(window_size) / window_size
-    smoothed = np.convolve(data, window, mode='same')
-    
-    # 处理边界效应
-    half_window = window_size // 2
-    smoothed[:half_window] = data[:half_window]
-    smoothed[-half_window:] = data[-half_window:]
-    
-    return smoothed.tolist()
 
 # 阈值设置路由
 @app.route('/set_thresholds', methods=['POST'])
@@ -415,6 +208,7 @@ def set_thresholds():
     except Exception as e:
         return f"<script>alert('设置错误: {str(e)}');window.history.back();</script>"
     
+
 # 主页路由
 @app.route("/")
 def index():
@@ -481,7 +275,7 @@ def query_history():
     }
     return render_template('table.html', **templateData)
 
-#基本折线图路由
+#数据库统计图路由
 @app.route('/select_graph', methods=['POST'])
 def select_graph():
     selected_date2 = request.form['date']
@@ -509,14 +303,21 @@ def select_graph():
     rows2 = curs.fetchall()
     # 处理数据以生成图表
     # 处理第一天的数据
-    times, temps, hums = [], [], []
+    times, times1, temps, hums = [], [], [], []
     for row in rows:
+
         times.append(row[0])
         temps.append(row[1])
         hums.append(row[2])
+        # # 只保留时间部分time1用于
+        # time_str = row[0].split(' ')[1]  # 提取时间部分
+        # times1.append(time_str)
     # 处理第二天的数据
     times2, temps2, hums2 = [], [], []
-    for row in rows2:    
+    for row in rows2:
+         # 只保留时间部分
+        # time_str = row[0].split(' ')[1]  # 提取时间部分
+        # times2.append(time_str)
         times2.append(row[0])
         temps2.append(row[1])
         hums2.append(row[2])
@@ -530,77 +331,10 @@ def select_graph():
         yaxis=dict(title='温度 (°C)', range=[20, 40]),  # 固定纵轴范围
         hovermode='x unified'
     )
-# 绘制数据处理后的图像
-#去除离群值
-    temps_ho = handle_outliers(temps)
-    hums_ho = handle_outliers(hums)
-# 温度制图
-    trace_temp_ho = go.Scatter(
-        x=times,  # x轴数据（时间）
-        y=temps_ho,  # y轴数据（温度值）
-        mode='lines',
-        name=f'{selected_date2} 温度 (°C)',    
-    )
-    layout_temp_ho = go.Layout(
-        title='温度随时间变化趋势_去离群值',
-        xaxis=dict(title='时间'),
-        yaxis=dict(title='温度 (°C)', range=[20, 40]),  # 固定纵轴范围
-        hovermode='x unified'
-    )
-    fig_temp_ho = go.Figure(data=[trace_temp_ho], layout=layout_temp_ho)
-    plot_div_temp_ho = pyo.plot(fig_temp_ho, output_type='div', include_plotlyjs=False)
-# 湿度制图
-    trace_hum_ho = go.Scatter(
-        x=times,  # x轴数据（时间）
-        y=hums_ho,  # y轴数据（湿度值）
-        mode='lines',
-        name=f'{selected_date2} 湿度 (%)',    
-    )
-    layout_hum_ho = go.Layout(
-        title='湿度随时间变化趋势_去离群值',
-        xaxis=dict(title='时间'),
-        yaxis=dict(title='湿度 (%)', range=[0, 100]),  # 固定纵轴范围
-        hovermode='x unified'
-    )
-    fig_hum_ho = go.Figure(data=[trace_hum_ho], layout=layout_hum_ho)
-    plot_div_hum_ho = pyo.plot(fig_hum_ho, output_type='div', include_plotlyjs=False)
-#数据平滑
-    temps_sm = smooth_data(temps_ho, window_size=5)
-    hums_sm = smooth_data(hums_ho, window_size=5)
-    # 制图
-    trace_temp_sm = go.Scatter(
-        x=times,  # x轴数据（时间）
-        y=temps_sm,  # y轴数据（温度值）
-        mode='lines',
-        name=f'{selected_date2} 温度 (°C)',    
-    )
-    layout_temp_sm = go.Layout(
-        title='温度随时间变化趋势_平滑',
-        xaxis=dict(title='时间'),
-        yaxis=dict(title='温度 (°C)', range=[20, 40]),  # 固定纵轴范围
-        hovermode='x unified'
-    )
-    fig_temp_sm = go.Figure(data=[trace_temp_sm], layout=layout_temp_sm)
-    plot_div_temp_sm = pyo.plot(fig_temp_sm, output_type='div', include_plotlyjs=False)
-    # 湿度制图
-    trace_hum_sm = go.Scatter(
-        x=times,  # x轴数据（时间）
-        y=hums_sm,  # y轴数据（湿度值）
-        mode='lines',
-        name=f'{selected_date2} 湿度 (%)',    
-    )
-    layout_hum_sm = go.Layout(
-        title='湿度随时间变化趋势_平滑',
-        xaxis=dict(title='时间'),
-        yaxis=dict(title='湿度 (%)', range=[0, 100]),  # 固定纵轴范围
-        hovermode='x unified'
-    )
-    fig_hum_sm = go.Figure(data=[trace_hum_sm], layout=layout_hum_sm)
-    plot_div_hum_sm = pyo.plot(fig_hum_sm, output_type='div', include_plotlyjs=False)
-# 添加温度阈值线
+     # 添加温度阈值线
     temp_thresholds = []
     for th in thresholds:
-    # 根据时段设置不同颜色
+        # 根据时段设置不同颜色
         color = 'red' if th[0] == 'A' else 'green' if th[0] == 'B' else 'blue'
         temp_thresholds.append(go.Scatter(
             x=[times[0], times[-1]], 
@@ -612,7 +346,7 @@ def select_graph():
     fig_temp = go.Figure(data=[trace_temp] + temp_thresholds, layout=layout_temp)
     plot_div_temp = pyo.plot(fig_temp, output_type='div', include_plotlyjs=False)
  
-# 使用Plotly绘制湿度图像
+    # 使用Plotly绘制湿度图像
     trace_hum = go.Scatter(x=times, y=hums, mode='lines', name='湿度 (%)')
     layout_hum = go.Layout(
         title='湿度随时间变化趋势',
@@ -620,7 +354,7 @@ def select_graph():
         yaxis=dict(title='湿度 (%)', range=[0, 100]),  # 固定纵轴范围
         hovermode='x unified'
     )
-# 添加湿度阈值线
+    # 添加湿度阈值线
     hum_thresholds = []
     for th in thresholds:
         # 根据时段设置不同颜色
@@ -634,28 +368,19 @@ def select_graph():
         ))
     fig_hum = go.Figure(data=[trace_hum] + hum_thresholds, layout=layout_hum)
     plot_div_hum = pyo.plot(fig_hum, output_type='div', include_plotlyjs=False)
-# 使用Plotly绘制温湿度散点图
-    trace_temp_hum = go.Scatter(
-        x=temps, 
-        y=hums, 
-        mode='markers', 
-        name='温湿度散点图',
-        marker=dict(size=5, color='blue', opacity=0.5)
+    # 使用Plotly绘制温湿度图像
+    layout = go.Layout(
+    title='温湿度随时间变化趋势',
+    xaxis=dict(title='时间'),
+    yaxis=dict(title='数值'),
+    hovermode='x unified'
     )
-    layout_temp_hum = go.Layout(
-        title='温湿度散点图',
-        xaxis=dict(title='温度 (°C)'),
-        yaxis=dict(title='湿度 (%)'),
-        hovermode='closest'
-    )
-    fig_temp_hum = go.Figure(data=[trace_temp_hum], layout=layout_temp_hum)
-    plot_div_temp_hum = pyo.plot(fig_temp_hum, output_type='div', include_plotlyjs=False)
-
-# 计算一阶差分
+    fig_combined = go.Figure(data=[trace_temp, trace_hum], layout=layout)
+    plot_div_combined = pyo.plot(fig_combined, output_type='div', include_plotlyjs=False)
+    # 计算一阶差分
     temp_diff = [0] + [temps[i] - temps[i-1] for i in range(1, len(temps))]
     hum_diff = [0] + [hums[i] - hums[i-1] for i in range(1, len(hums))]
-
-# 使用Plotly绘制温度差分图像
+    # 使用Plotly绘制温度差分图像
     trace_temp_diff = go.Scatter(x=times, y=temp_diff, mode='lines', name='温度变化 (°C)')
     layout_temp_diff = go.Layout(
         title='一阶差分·温度变化量',
@@ -734,129 +459,18 @@ def select_graph():
         'start_time': start_time,
         'end_time': end_time,
         'selected_date2': selected_date2,
+        # 'plot_url_temp': plot_url_temp,  # 温度图像URL
         'plot_div_temp': plot_div_temp, # Plotly温度图像的HTML代码
+        # 'plot_url_hum': plot_url_hum ,   # 湿度图像URL
         'plot_div_hum': plot_div_hum,  # Plotly湿度图像的HTML代码
-        'plot_div_temp_ho': plot_div_temp_ho, # 温度去离群值图像
-        'plot_div_hum_ho': plot_div_hum_ho, # 湿度去离群值图像
-        'plot_div_temp_sm': plot_div_temp_sm, # 温度平滑图像
-        'plot_div_hum_sm': plot_div_hum_sm, # 湿度平滑图像
-        'plot_div_temp_hum': plot_div_temp_hum, # 温湿度散点图像
+        'plot_div_combined': plot_div_combined , # 温湿度组合图表
         'plot_div_temp_diff': plot_div_temp_diff,  # 温度差分图像
         'plot_div_hum_diff': plot_div_hum_diff,  # 湿度差分图像
         'plot_div_temp_compare': plot_div_temp_compare,  # 温度对比图
         'plot_div_hum_compare': plot_div_hum_compare  # 湿度对比图
     }
     return render_template('graphs.html', **templateData)
-
-# 数据统计计算路由
-@app.route('/calculate_stats', methods=['POST'])
-def handle_calculate_stats():
-    selected_date = request.form['stats_date']
-    start_time = request.form['stats_start']
-    end_time = request.form['stats_end']
-    
-    stats = calculate_statistics(selected_date, start_time, end_time)
-    
-    if not stats:
-        return jsonify({'error': '没有找到指定时段的数据'})
-    
-    return jsonify(stats)
-
-# 数据统计保存路由
-@app.route('/save_stats', methods=['POST'])
-def handle_save_stats():
-    try:
-        selected_date = request.form['stats_date']
-        start_time = request.form['stats_start']
-        end_time = request.form['stats_end']
-        
-        stats = calculate_statistics(selected_date, start_time, end_time)
-        if not stats:
-            return jsonify({'error': '没有找到指定时段的数据'})
-            
-        save_stats_result(selected_date, selected_date, start_time, end_time, stats)
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
-# 数据统计历史查询路由
-@app.route('/query_stats_history', methods=['POST'])
-def query_stats_history():
-    start_date = request.form['start_date']
-    end_date = request.form['end_date']
-    
-    db = get_db()
-    curs = db.cursor()
-    curs.execute('''
-        SELECT id, start_date, start_time, end_time, 
-               temp_avg, hum_avg, correlation
-        FROM stats_results
-        WHERE start_date BETWEEN ? AND ?
-        ORDER BY start_date DESC, start_time DESC
-    ''', (start_date, end_date))
-    
-    rows = curs.fetchall()
-    if not rows:
-        return jsonify({'error': '没有找到指定日期范围内的记录'})
-    
-    # 转换为字典列表
-    results = []
-    for row in rows:
-        results.append({
-            'id': row[0],
-            'start_date': row[1],
-            'start_time': row[2],
-            'end_time': row[3],
-            'temp_avg': row[4],
-            'hum_avg': row[5],
-            'correlation': row[6]
-        })
-    
-    return jsonify(results)
-# 数据统计详情查询路由
-@app.route('/get_stats_detail')
-def get_stats_detail():
-    record_id = request.args.get('id')
-    
-    db = get_db()
-    curs = db.cursor()
-    curs.execute('''
-        SELECT * FROM stats_results WHERE id = ?
-    ''', (record_id,))
-    
-    row = curs.fetchone()
-    if not row:
-        return jsonify({'error': '记录不存在'})
-    
-    # 解析JSON格式的区间数据
-    
-    # 修复JSON解析问题
-    def safe_json_loads(json_str):
-        try:
-            return json.loads(json_str.replace("'", '"'))  # 将单引号替换为双引号
-        except:
-            return {}
-    temp_bins = safe_json_loads(row[14]) if row[14] else {}
-    hum_bins = safe_json_loads(row[15]) if row[14] else {}
-    
-    return jsonify({
-        'id': row[0],
-        'start_date': row[1],
-        'end_date': row[2],
-        'start_time': row[3],
-        'end_time': row[4],
-        'temp_avg': row[5],
-        'temp_min': row[6],
-        'temp_max': row[7],
-        'temp_median': row[8],
-        'hum_avg': row[9],
-        'hum_min': row[10],
-        'hum_max': row[11],
-        'hum_median': row[12],
-        'correlation': row[13],
-        'temp_bins': temp_bins,
-        'hum_bins': hum_bins
-    })
+#中转路由
 
 # 参数提交路由2 ：数据检测频率
 @app.route('/set_frequency', methods=['POST'])
