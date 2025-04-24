@@ -355,7 +355,6 @@ def calculate_hourly_statistics(selected_date, start_time, end_time):
     
     return hourly_stats
     
-
 # 离群值处理函数
 def handle_outliers(data, threshold=3.0):
     """
@@ -414,7 +413,7 @@ def train_predict_model(data_type='temp', look_back=None):
     """
     db = get_db()
     curs = db.cursor()
-    curs.execute(f"SELECT {data_type} FROM DHT_data ORDER BY timestamp DESC LIMIT 1000")
+    curs.execute(f"SELECT {data_type} FROM DHT_data ORDER BY timestamp DESC LIMIT 600") # 600个数据点，约10小时数据
     data = np.array(curs.fetchall()).flatten()
      # 获取数据采集频率
     freq = getLastFreq() / 60  # 分钟/次
@@ -425,11 +424,11 @@ def train_predict_model(data_type='temp', look_back=None):
             # 10小时数据点数 = 6 * (60 / freq)
             look_back = int(10 * (60 / freq))  # 例如freq=5 → 144
         elif freq <= 60:  # 中频(<=1小时/次)
-            # 24小时数据点数 = 24 * (60 / freq)
-            look_back = int(24 * (60 / freq))  # 例如freq=60 → 24
+            # 10小时数据点数 = 10 * (60 / freq)
+            look_back = int(10 * (60 / freq))  # 例如freq=60 → 24
         else:  # 低频(>1小时/次)
-            # 7天数据点数 = 7 * 24 * (60 / freq)
-            look_back = int(7 * 24 * (60 / freq))  # 例如freq=120 → 84
+            # 7天数据点数 = 7 * 10 * (60 / freq)
+            look_back = int(7 * 10 * (60 / freq))  # 例如freq=120 → 84
     # 使用auto_arima自动选择最佳参数
     model = auto_arima(
         data,
@@ -446,24 +445,46 @@ def train_predict_model(data_type='temp', look_back=None):
         stepwise=True   # 使用逐步算法加速
     )
     return model
-
+# 计算评估指标
+def calculate_metrics(true, pred):
+    # 过滤掉None值
+    true = np.array([x for x in true if x is not None])
+    pred = np.array([x for x in pred if x is not None])
+    
+    if len(true) == 0 or len(pred) == 0:
+        return {
+            'MSE': 0,
+            'MAE': 0,
+            'MAPE': 0,
+            'R2': 0
+        }
+    # 均方误差 (MSE)
+    mse = np.mean((true - pred)**2)
+    # 平均绝对误差 (MAE)
+    mae = np.mean(np.abs(true - pred))
+    # 平均绝对百分比误差 (MAPE)
+    mape = np.mean(np.abs((true - pred)/true))*100
+    # R平方
+    ss_res = np.sum((true - pred)**2)
+    ss_tot = np.sum((true - np.mean(true))**2)
+    r2 = 1 - (ss_res/ss_tot)
+    
+    return {
+        'MSE': float(mse),
+        'MAE': float(mae),
+        'MAPE': float(mape),
+        'R2': float(r2)
+    }
 # 预测路由
 @app.route('/predict', methods=['POST'])
 def predict():
     data_type = request.form.get('type', 'temp')  # temp或hum
-    # 获取采集频率并计算合理的默认步长
-    # freq = getLastFreq() / 60  # 转换为分钟
-    # if freq <= 5:  # 高频采集
-    #     default_steps = 12  # 1小时数据(12×5分钟)
-    # elif freq <= 60:  # 中频
-    #     default_steps = 6   # 6小时
-    # else:  # 低频
-    #     default_steps = 3   # 6小时(3×120分钟)
+
     steps = int(request.form.get('steps', 6))     # 预测步长
-    
     model = train_predict_model(data_type)
     forecast = model.predict(n_periods=steps)
-    
+
+
     return jsonify({
         'predictions': forecast.tolist(),
         'type': data_type,
@@ -477,6 +498,56 @@ def update_models_periodically():
             train_predict_model('temp')
             train_predict_model('hum')
             time.sleep(3600)  # 每小时更新一次模型
+# 评估路由
+@app.route('/evaluate_prediction', methods=['POST'])
+def evaluate_prediction():
+    try:
+        data_type = request.form.get('type', 'hum')  # 默认为湿度预测评估
+        steps = int(request.form.get('steps', 30))    # 预测步长
+        
+        # 获取真实数据
+        db = get_db()
+        curs = db.cursor()
+        curs.execute(f"SELECT {data_type} FROM DHT_data ORDER BY timestamp ASC LIMIT {steps*2}")
+        data = np.array(curs.fetchall()).flatten()
+        
+        if len(data) < steps*2:
+            return jsonify({'error': f'需要至少{steps*2}个历史数据点进行评估'})
+        
+        # 分割数据：前steps个用于训练，后steps个用于验证
+        train_data = data[:steps]
+        test_data = data[steps:]
+        
+        # 训练模型
+        model = auto_arima(
+            train_data,
+            start_p=0, max_p=5,
+            start_q=0, max_q=5,
+            d=1,
+            seasonal=True,
+            m=24,
+            trace=False,
+            error_action='ignore',
+            suppress_warnings=True,
+            stepwise=True
+        )
+        
+        # 进行预测
+        forecast = model.predict(n_periods=steps)
+        # 计算评估指标
+        metrics = calculate_metrics(test_data, forecast)
+        
+        # 返回评估结果
+        return jsonify({
+            'model_order': str(model.order),        # 未使用
+            'actual_values': test_data.tolist(),    # 未使用
+            'predicted_values': forecast.tolist(),  # 未使用
+            'metrics': metrics,
+            'steps': steps                          # 未使用
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)})
 # 阈值设置路由
 @app.route('/set_thresholds', methods=['POST'])
 def set_thresholds():
@@ -1020,3 +1091,4 @@ if __name__ == "__main__":
     monitor_thread = Thread(target=background_monitor, daemon=True)
     monitor_thread.start() 
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
+
